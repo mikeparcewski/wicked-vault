@@ -1,0 +1,5 @@
+node_modules/
+.wicked-vault/
+*.log
+# transient proof-run output (the scripts regenerate it; not source)
+test/evidence-*.txt

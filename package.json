@@ -1,0 +1,21 @@
+{
+  "name": "wicked-vault",
+  "version": "0.1.0",
+  "description": "Local-first evidence primitive — record / verify / cross-check claim-backing artifacts with tamper-evident re-derivation. Never trusts a stored verdict.",
+  "type": "module",
+  "bin": {
+    "wicked-vault": "bin/wicked-vault.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "docs"
+  ],
+  "scripts": {
+    "prove": "bash test/prove-on-memos.sh"
+  }
+}
