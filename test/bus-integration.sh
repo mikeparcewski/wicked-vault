@@ -78,8 +78,14 @@ mkdir -p "$STUB"
 export VAULT_EMIT_LOG="$WORK/emitted.jsonl"
 : > "$VAULT_EMIT_LOG"
 
+# Mirror wicked-bus's DUAL cjs/esm exports map. The real emit/openDb live in the
+# ESM entry; the CJS entry is a shim that throws on access. This is the exact
+# shape that exposed the cwd-resolution bug — `require.resolve` picks the CJS
+# shim, so the vault MUST import the ESM entry. If resolution regresses to the
+# shim, the throwing getter -> no usable emit -> the assertion below fails.
 cat > "$STUB/package.json" <<'JSON'
-{ "name": "wicked-bus", "version": "0.0.0-stub", "type": "module", "exports": { ".": "./index.mjs" } }
+{ "name": "wicked-bus", "version": "0.0.0-stub", "type": "module",
+  "exports": { ".": { "import": "./index.mjs", "require": "./index.cjs" } } }
 JSON
 cat > "$STUB/index.mjs" <<'JS'
 import { appendFileSync } from 'node:fs';
@@ -90,6 +96,13 @@ export function emit(_db, _config, event) {
   appendFileSync(process.env.VAULT_EMIT_LOG, JSON.stringify(event) + '\n');
   return { event_id: 1, idempotency_key: 'stub' };
 }
+JS
+cat > "$STUB/index.cjs" <<'JS'
+// CJS shim — mirrors wicked-bus. If the vault loads THIS instead of index.mjs,
+// resolution regressed to the require condition; accessing emit throws.
+module.exports = new Proxy({}, { get() {
+  throw new Error('stub CJS shim loaded — vault picked the require condition (resolution regression)');
+} });
 JS
 
 cd "$PROJ" || exit 2

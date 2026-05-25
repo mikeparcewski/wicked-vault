@@ -121,6 +121,10 @@ isn't — or when `WICKED_VAULT_NO_BUS=1` is set — emission is a silent no-op 
 the CLI behaves identically. A bus error never changes a verdict, the JSON on
 stdout, or an exit code.
 
+Proven end-to-end: `test/bus-integration.sh` drives the vault into a **real**
+wicked-bus (db isolated to a temp dir) and reads every event back off the bus —
+and runs in CI on every push.
+
 | Command | event_type | subdomain | key payload |
 |---|---|---|---|
 | `record` | `wicked.evidence.recorded` | `vault.record` | scope, phase, claim_id, kind, id, envelope_hash |
@@ -167,10 +171,14 @@ evaluator may cite — not the whole story. Nondeterministic observation verifie
 npm run prove                 # record -> tamper -> verify-rejects on a real repo
 bash test/verifiers.sh        # the 5 verifiers, pass + fail cases
 bash test/attestation.sh      # criteria-binding, attest fail-closed/independence, require_attestation
-bash test/bus-integration.sh  # graceful no-op + event validity + emission (incl. attested)
+bash test/bus-integration.sh  # graceful no-op + schema validity + real-bus emission (init/record/attest/cross-check)
 ```
 
-Status: v0.2.0 — deterministic core proven on real repos; criteria-binding +
+`attestation.sh` and `bus-integration.sh` are the gating proofs and run in CI
+(`.github/workflows/ci.yml`) on ubuntu + macos, with a Windows CLI smoke.
+
+Status: v0.2.1 — deterministic core proven on real repos; criteria-binding +
 independent judgment tier (ADR-0002, council 5–0) implemented and proven;
-wicked-bus emission + provider registration (optional, fire-and-forget). Not yet
-implemented: `pr_check_status`/`http_status_eq` and the sqlite query cache.
+wicked-bus integration **proven end-to-end against a real bus** (emit → store →
+poll), optional and fire-and-forget. Not yet implemented:
+`pr_check_status`/`http_status_eq` and the sqlite query cache.

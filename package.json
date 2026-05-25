@@ -1,6 +1,6 @@
 {
   "name": "wicked-vault",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first evidence primitive — record evidence with its acceptance criteria, re-derive integrity deterministically, and record independent third-party judgments. Never trusts a stored verdict, never lets work self-grade its own \"done\".",
   "type": "module",
   "bin": {
