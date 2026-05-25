@@ -16,7 +16,7 @@ wicked-bus / wicked-brain / wicked-testing.
 > distinct from deterministic verifier results; new invariant **G10**
 > (attestation-chain trust, §4); `verify` is two-tier with an integrity-only
 > default (§8); new events (§7). The Node CLI still **never calls a model** —
-> G7 holds; the judge runs in the `verify-evidence` skill.
+> G7 holds; the judge runs in the `analyze-evidence` skill.
 
 wicked-vault is the **evidence primitive**: it records claim-backing
 artifacts, hashes them tamper-evidently, and *re-derives* their status on
@@ -202,7 +202,7 @@ reproducible.**
   types and are never represented as the same kind of result.** Corollaries:
   (a) acceptance criteria are mandatory and bound into the envelope, frozen to
   the evidence (anti-downgrade); (b) the model runs only in the orchestration
-  layer (`verify-evidence` skill) — the CLI never calls a model, so G7 holds;
+  layer (`analyze-evidence` skill) — the CLI never calls a model, so G7 holds;
   (c) `attest` is fail-closed if the frozen inputs no longer hash-match, and
   rejects when `evaluator == created_by`; (d) judgments are non-reproducible by
   design — "never trust the cached verdict" here means *re-evaluate
@@ -243,7 +243,7 @@ but it does not belong in the deterministic founding spec.
 pure, deterministic, nor re-derivable — registering it as a verifier would
 falsify G7 at the type level (ADR-0001 council disqualifier, upheld). ADR-0002
 adds independent judgment **at a different layer**: the model runs in the
-`verify-evidence` *skill*, never in the CLI, and its output is recorded as an
+`analyze-evidence` *skill*, never in the CLI, and its output is recorded as an
 `opinion_attestation` (§3.4) under G10 — a distinct, non-reproducible type, not
 a verifier result. G7's boundary is intact; the capability lives above it.
 
@@ -348,7 +348,7 @@ wicked-vault list     --scope S [--phase P]                  -> [Artifact…]
 
 Vault root auto-detected by walking up to `.wicked-vault/`; `--cwd` overrides.
 Every command emits JSON and exits non-zero on `FAIL`/`ERROR` (G5). The model
-judge runs in the `wicked-vault:verify-evidence` skill, which orchestrates
+judge runs in the `wicked-vault:analyze-evidence` skill, which orchestrates
 `inspect → independent eval → attest`; the CLI itself never calls a model.
 
 ---

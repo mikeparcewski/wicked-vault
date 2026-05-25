@@ -24,7 +24,7 @@ It checks on two tiers (ADR-0002):
 |---|---|
 | `record` · `verify` · `inspect` · `attest` · `cross-check` · `supersede` | "is the work *done*?" (gate logic) |
 | criteria-binding + tamper-evidence (envelope hash; git as audit chain) | scenario/flake history; claim authoring; work-shape |
-| the deterministic verifier family **and** the append-only attestation ledger | running the judge — the model lives in the `verify-evidence` *skill*, never in the CLI |
+| the deterministic verifier family **and** the append-only attestation ledger | running the judge — the model lives in the `analyze-evidence` *skill*, never in the CLI |
 
 The consumer authors the contract; the vault evaluates it mechanically (G9) and
 records independent judgments without re-deriving them (G10). It cannot decide
@@ -44,7 +44,7 @@ npx wicked-vault-install --path ~/.claude   # a specific config root
 
 This mirrors the shared wicked-bus / wicked-brain installer: `$CLAUDE_CONFIG_DIR`
 is honored, alt-config layouts are probed, and skills land as
-`wicked-vault-{init,record-evidence,verify-evidence,cross-check-evidence}/`
+`wicked-vault-{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence}/`
 under each CLI's `skills/`. If
 wicked-bus is installed, the installer also registers the vault as a bus
 provider (see below).
@@ -70,13 +70,22 @@ wicked-vault list --scope S
 ```
 
 Output is JSON; exit code is the gate signal (0 = PASS). The model judge runs in
-the `wicked-vault:verify-evidence` skill (`inspect → eval → attest`) — the CLI
+the `wicked-vault:analyze-evidence` skill (`inspect → eval → attest`) — the CLI
 itself never calls a model.
+
+## Two skills, two tiers (so the caller knows what they're invoking)
+
+- **`wicked-vault:verify-evidence`** — integrity tier. Deterministic, model-free,
+  reproducible, CI-safe: is the artifact intact and does its pure verifier pass?
+- **`wicked-vault:analyze-evidence`** — judgment tier. Runs an *independent*
+  model to judge evidence against criteria; non-reproducible; records an
+  attestation. The name tells you you're spending a model call and getting an
+  opinion, not a re-derivation.
 
 ## Independent evaluation (the judgment tier — G10)
 
 For criteria a deterministic verifier can't express ("the change adequately
-addresses the documented failure modes"), the `wicked-vault:verify-evidence`
+addresses the documented failure modes"), the `wicked-vault:analyze-evidence`
 skill orchestrates an **independent** judge:
 
 1. `inspect` returns the frozen criteria + evidence.
@@ -140,7 +149,7 @@ Since ADR-0002 the verifier is an *optional* composable sub-check an independent
 evaluator may cite — not the whole story. Nondeterministic observation verifiers
 (`pr_check_status`, `http_status_eq`) are a separate extension. `llm_eval` is
 **not** a verifier kind (it would falsify G7) — independent judgment lives in the
-`verify-evidence` skill instead, recorded as an `opinion_attestation` under G10.
+`analyze-evidence` skill instead, recorded as an `opinion_attestation` under G10.
 
 ## Proof
 

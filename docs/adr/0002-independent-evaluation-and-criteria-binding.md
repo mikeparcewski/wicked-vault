@@ -102,7 +102,7 @@ as such.
 - `attest` **rejects** when the recorded `evaluator` equals the artifact's
   `created_by` (catches the lazy/default self-grade). Spoofable, but a mechanical
   baseline + audit trail, not pure honor-system.
-- The `verify-evidence` skill invokes an evaluator **distinct from the worker** —
+- The `analyze-evidence` skill invokes an evaluator **distinct from the worker** —
   an external model CLI or isolated subagent (lineage: wicked-testing reviewer
   isolation; `wicked-garden:jam:council` external CLIs).
 - Stronger enforcement (signed evaluator identity, separate credential boundary)
@@ -138,7 +138,7 @@ are attacker-influenceable inputs to the judge. Stated threat model:
   Mitigated by D1 (contract-pinned criteria as the trusted path;
   `criteria_authored_by` attribution).
 - **T2 — payload/criteria prompt injection:** content steers the judge to PASS.
-  Mitigations the `verify-evidence` skill MUST apply: evidence and criteria are
+  Mitigations the `analyze-evidence` skill MUST apply: evidence and criteria are
   passed to the judge as **escaped, quoted data** (never as instructions); the
   judge returns a **structured output schema** (opinion + rationale + cited
   sub-checks), not free text; **refusal/`unclear` on instruction-conflict**;
@@ -152,8 +152,9 @@ are attacker-influenceable inputs to the judge. Stated threat model:
 - CONTRACTS.md → v2: new invariant **G10**; G3 reframed (integrity re-derivation +
   independent re-evaluation); `verify` documented as two-tier; `record` requires
   criteria; `opinion_attestation` schema + threat model added.
-- `wicked-vault:verify-evidence` becomes an orchestration skill, not a thin CLI
-  wrapper, and carries the independence + injection rules.
+- The judgment-tier orchestration lives in a dedicated **`wicked-vault:analyze-evidence`**
+  skill (see Amendment 1); `wicked-vault:verify-evidence` stays the deterministic
+  integrity check. The independence + injection rules live in `analyze-evidence`.
 - New wicked-bus events: `wicked.evidence.attested`, `wicked.claim.evaluated`.
 - The v1 deterministic verifiers are retained as composable sub-checks.
 - ADR-0001 Q5 council dissent acknowledged; this is a user-adjudicated extension
@@ -164,3 +165,20 @@ are attacker-influenceable inputs to the judge. Stated threat model:
   passes checks but misses the acceptance criteria" (needs judgment), the
   judgment tier's complexity may be unjustified. Worth measuring once consumers
   exist.
+
+## Amendment 1 (2026-05-25) — split the judgment tier into its own skill
+
+The two tiers are now two skills, so the caller's *intent is legible at the
+invocation surface* — not just in the data model (distinct `opinion_attestation`
+type) and the flags (`--integrity-only` default):
+
+- **`wicked-vault:verify-evidence`** — integrity tier only. Deterministic,
+  model-free, reproducible, CI-safe.
+- **`wicked-vault:analyze-evidence`** — judgment tier. Orchestrates
+  `inspect → independent eval → attest`; runs a model; non-reproducible.
+
+This reinforces council revisions #1 (distinct types) and #2 (judgment is never
+the default) at the invocation layer, and mirrors the CLI, which has a `verify`
+verb but deliberately **no `analyze` verb** (the model never runs in the CLI).
+No CLI/core change — a skill-surface refinement. Not re-councilled: it makes the
+accepted D2 boundary more legible, it does not change it.

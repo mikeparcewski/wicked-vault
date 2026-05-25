@@ -66,12 +66,12 @@ weaker criteria (anti-downgrade).
 The **trusted path** is contract-pinned criteria: when `declare-contract` pins
 `criteria` for the claim, a matching `--criteria` is stamped
 `criteria_authored_by: contract`. Worker-supplied criteria are stamped
-`record` (a weaker provenance class — see `wicked-vault:verify-evidence`'s
+`record` (a weaker provenance class — see `wicked-vault:analyze-evidence`'s
 threat model). A `--criteria` that contradicts a contract pin is a G8 downgrade
 and is rejected.
 
 The independent judgment of *whether the evidence meets these criteria* is the
-job of `wicked-vault:verify-evidence` (the judgment tier), not `record`.
+job of `wicked-vault:analyze-evidence` (the judgment tier), not `record`.
 
 ## Verifier syntax
 

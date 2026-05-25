@@ -161,9 +161,10 @@ for (const target of targets) {
 
 console.log(`\nwicked-vault skills installed! Available skills:`);
 console.log(`  wicked-vault:init                 — Initialize a vault in a repo`);
-console.log(`  wicked-vault:record-evidence      — Record claim-backing evidence`);
-console.log(`  wicked-vault:verify-evidence      — Re-derive a single artifact's verdict`);
-console.log(`  wicked-vault:cross-check-evidence — Declare a contract and check it mechanically`);
+console.log(`  wicked-vault:record-evidence      — Record evidence + the criteria it must clear`);
+console.log(`  wicked-vault:verify-evidence      — Integrity tier: re-derive a single artifact (deterministic, CI-safe)`);
+console.log(`  wicked-vault:analyze-evidence     — Judgment tier: independent model judges evidence vs criteria`);
+console.log(`  wicked-vault:cross-check-evidence — Declare a contract and check it (integrity / +attestations)`);
 
 // Register as a wicked-bus provider if the bus is available. Mirrors the
 // wicked-brain installer. Non-fatal: the vault emits events when wicked-bus is

@@ -109,13 +109,13 @@ npx wicked-vault cross-check --scope checkout --phase release --with-attestation
 ```
 
 `--with-attestations` consults the latest independent opinion per claim (the
-attestations recorded by `wicked-vault:verify-evidence`). For a claim with
+attestations recorded by `wicked-vault:analyze-evidence`). For a claim with
 `require_attestation: true`, it `PASS`es only when integrity passes **and** a
 non-stale, independent `pass` opinion exists; otherwise `UNATTESTED` / `REJECT`.
 For other claims the opinion is advisory (surfaced, doesn't change the result).
 
 This mode is **not deterministic and not for the default gate** — opinions come
-from a model and are point-in-time. Run `wicked-vault:verify-evidence` first to
+from a model and are point-in-time. Run `wicked-vault:analyze-evidence` first to
 produce the attestations, then use this mode for a release sign-off that
 requires a third-party judgment. Keep `--integrity-only` on the fast CI path.
 

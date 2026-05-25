@@ -249,7 +249,7 @@ export function verify(root, id) {
 
 // ── Judgment tier (G10) — model-free CLI side: inspect, attest, list ──────────
 
-// What the verify-evidence skill feeds the independent judge: the frozen
+// What the analyze-evidence skill feeds the independent judge: the frozen
 // criteria + evidence + an integrity check. Returns raw text/json so the skill
 // can pass them as ESCAPED DATA (never as instructions) to the evaluator (D7).
 export function inspect(root, id) {
