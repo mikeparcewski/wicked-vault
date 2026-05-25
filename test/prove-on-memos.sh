@@ -8,7 +8,10 @@ set -u
 # free of bus side effects (see test/bus-integration.sh for the bus path).
 export WICKED_VAULT_NO_BUS=1
 REPO="${1:-$HOME/Projects/memos}"
-VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
+# Vault bin resolved relative to this script (portable). REPO is an external
+# repo the proof runs against (defaults to ~/Projects/memos; pass one as $1).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+VAULT="node $ROOT/bin/wicked-vault.mjs"
 cd "$REPO" || { echo "no repo at $REPO"; exit 2; }
 rm -rf .wicked-vault
 

@@ -12,7 +12,10 @@
 #   8. contract-pinned criteria upgrade provenance; a mismatch is a G8 downgrade
 set -u
 export WICKED_VAULT_NO_BUS=1
-VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
+# Resolve the vault bin relative to THIS script so the proof runs anywhere
+# (local checkout, CI runner) — not a hardcoded ~/Projects path.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+VAULT="node $ROOT/bin/wicked-vault.mjs"
 FAILED=0
 field() { python3 -c "import json,sys;print(json.load(sys.stdin).get('$1',''))"; }
 ok()   { echo "  -> PASS: $1"; }

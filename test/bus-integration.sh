@@ -16,7 +16,10 @@
 # emit(db, config, event) API exercised here.
 set -u
 
-VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
+# Vault bin resolved relative to this script (portable: local + CI). The bus
+# repo is an external sibling — absent in CI, the bus-specific halves skip.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+VAULT="node $ROOT/bin/wicked-vault.mjs"
 BUS_DIR="$HOME/Projects/wicked-bus"
 FAILED=0
 

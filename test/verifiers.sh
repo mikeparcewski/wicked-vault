@@ -16,7 +16,10 @@ set -u
 # (see test/bus-integration.sh for the wicked-bus path).
 export WICKED_VAULT_NO_BUS=1
 
-VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
+# Vault bin resolved relative to this script (portable: local + CI). memos is an
+# external sibling repo — absent in CI, the commit_exists section skips.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+VAULT="node $ROOT/bin/wicked-vault.mjs"
 MEMOS="$HOME/Projects/memos"
 
 WORK="$(mktemp -d)"

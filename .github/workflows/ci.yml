@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # The vault's "tests" are self-contained bash proofs that build throwaway
+  # vaults in temp dirs. They need a unix shell + node + python3 + jq (all on
+  # the ubuntu/macos runner images). External sibling repos (memos, wicked-bus)
+  # are absent in CI — the relevant sections skip gracefully.
+  proofs:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Attestation + criteria-binding proof (gating)
+        run: bash test/attestation.sh
+      - name: wicked-bus integration proof (gating)
+        run: bash test/bus-integration.sh
+      - name: Verifier coverage (informational)
+        run: bash test/verifiers.sh
+
+  # The proof harness above is unix bash; this job proves the shipped Node CLI
+  # itself runs on Windows (it is pure ESM + node stdlib — no native deps).
+  cli-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: CLI smoke — init / record / verify
+        shell: bash
+        env:
+          WICKED_VAULT_NO_BUS: '1'
+        run: |
+          set -e
+          mkdir -p ci-smoke && cd ci-smoke
+          node ../bin/wicked-vault.mjs init
+          OUT=$(node ../bin/wicked-vault.mjs record --scope ci --phase build --claim smoke \
+            --kind test-run --source "node --version" --criteria "node runs and exits 0" \
+            --verifier "exit_code_eq:0" --run)
+          echo "$OUT"
+          ID=$(node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).id))" <<< "$OUT")
+          node ../bin/wicked-vault.mjs verify "$ID"
