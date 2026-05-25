@@ -51,13 +51,19 @@ config root (Claude Code, Gemini, Copilot, Codex, Cursor, Kiro, Antigravity):
 npx wicked-vault-install               # detect and install everywhere
 npx wicked-vault-install --cli=claude  # one CLI only (comma-separated for several)
 npx wicked-vault-install --path ~/.claude   # a specific config root
+npx wicked-vault-install --help        # options
 ```
 
 This mirrors the shared wicked-bus / wicked-brain installer: `$CLAUDE_CONFIG_DIR`
 is honored, alt-config layouts are probed, and skills land as
-`wicked-vault-{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence}/`
+`wicked-vault-{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}/`
 under each CLI's `skills/`. If wicked-bus is installed, the installer also
 registers the vault as a bus provider (see below).
+
+**Updating:** say `wicked-vault:update` to your agent, or run
+`npm install -g wicked-vault@latest && npx wicked-vault-install` — it compares
+your version against npm and refreshes the skills across every CLI. Both
+binaries support `--help`.
 
 ## CLI
 
@@ -177,8 +183,9 @@ bash test/bus-integration.sh  # graceful no-op + schema validity + real-bus emis
 `attestation.sh` and `bus-integration.sh` are the gating proofs and run in CI
 (`.github/workflows/ci.yml`) on ubuntu + macos, with a Windows CLI smoke.
 
-Status: v0.2.1 — deterministic core proven on real repos; criteria-binding +
+Status: v0.3.0 — deterministic core proven on real repos; criteria-binding +
 independent judgment tier (ADR-0002, council 5–0) implemented and proven;
 wicked-bus integration **proven end-to-end against a real bus** (emit → store →
-poll), optional and fire-and-forget. Not yet implemented:
+poll), optional and fire-and-forget; `--help` on both binaries + a
+`wicked-vault:update` skill. Not yet implemented:
 `pr_check_status`/`http_status_eq` and the sqlite query cache.

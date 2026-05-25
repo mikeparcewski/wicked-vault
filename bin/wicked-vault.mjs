@@ -33,7 +33,53 @@ function emit(obj, ok) {
   process.exit(ok ? 0 : 1);
 }
 
+const HELP = `wicked-vault — local-first evidence primitive
+Record evidence with the acceptance criteria it must clear, re-derive integrity
+deterministically, and record independent third-party judgments. Never trusts a
+stored verdict; never lets work self-grade its own "done".
+
+USAGE
+  wicked-vault <command> [options]
+
+COMMANDS
+  init                         Create .wicked-vault/ in the current repo
+  record                       Capture evidence + the criteria it must clear
+                               --scope S --phase P --claim C --kind K --source "<cmd|file>"
+                               --criteria "<text|@file>" (--run | --artifact <file>) [--verifier "kind:arg"]
+  verify   <artifact-id>       Integrity tier: re-derive hashes + verifier (deterministic,
+                               model-free). Exit 0 iff intact AND pass. Surfaces latest opinion.
+  inspect  <artifact-id>       Frozen criteria + evidence + integrity (what a judge evaluates)
+  attest   <artifact-id>       Record an INDEPENDENT judgment (fail-closed; evaluator != creator)
+                               --opinion <pass|reject|unclear> --rationale "..." --evaluator ID
+                               [--model prov/ver] [--prompt-hash H] [--sampling '<json>']
+  attestations <artifact-id>   Show the append-only opinion log
+  cross-check                  Mechanical contract verdict; exit 0 iff PASS
+                               --scope S --phase P [--integrity-only (default) | --with-attestations]
+  declare-contract             Pin a contract  --scope S --phase P --spec <file>
+  supersede <old-id>           Append-only replacement (same flags as record)
+  list                         --scope S [--phase P]
+
+GLOBAL
+  --cwd <dir>     Operate on a vault rooted at <dir> (default: walk up from cwd)
+  --help, -h      Show this help
+
+OUTPUT   JSON on stdout; exit code is the gate signal (0 = PASS / success).
+ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
+
+Skills (AI CLIs):  wicked-vault:{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}
+Install skills:    npx wicked-vault-install        (run with --help for options)
+Docs:              https://github.com/mikeparcewski/wicked-vault
+`;
+
 const [cmd, ...rest] = process.argv.slice(2);
+
+// Help / no-command: print usage to stdout and exit 0 — before any vault or bus
+// work, so `--help` works outside a repo and never errors.
+if (cmd === undefined || cmd === '--help' || cmd === '-h' || cmd === 'help') {
+  process.stdout.write(HELP);
+  process.exit(0);
+}
+
 const args = parseArgs(rest);
 const cwd = (typeof args.cwd === 'string' && args.cwd) || process.cwd();
 

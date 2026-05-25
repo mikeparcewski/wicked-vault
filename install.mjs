@@ -64,9 +64,40 @@ const CLI_TARGETS = [
   { name: "antigravity", dir: join(home, ".antigravity", "skills"), platform: "antigravity" },
 ];
 
-console.log("wicked-vault installer\n");
-
 const args = argv.slice(2);
+
+// Help: print usage and exit 0 before doing any detection or filesystem work.
+if (args.includes("--help") || args.includes("-h")) {
+  process.stdout.write(`wicked-vault-install — install wicked-vault skills into your AI CLIs/IDEs
+
+Copies the wicked-vault skills into every detected CLI config root so your
+agent knows how to use the vault. Also registers wicked-vault as a wicked-bus
+provider when the bus is available.
+
+USAGE
+  npx wicked-vault-install [options]
+
+OPTIONS
+  (no options)        Detect and install into every supported CLI found
+  --cli=<name>        Install into one CLI only (comma-separated for several),
+                      e.g. --cli=claude  or  --cli=claude,cursor
+  --path=<dir>        Install into a specific config root, e.g. --path=~/.claude
+  --help, -h          Show this help
+
+SUPPORTED CLIs       claude, gemini, copilot, codex, cursor, kiro, antigravity
+                     (\$CLAUDE_CONFIG_DIR is honored; alt-config layouts are probed)
+
+INSTALLS (per CLI, under skills/)
+  wicked-vault-init · -record-evidence · -verify-evidence · -analyze-evidence
+  · -cross-check-evidence · -update
+
+To update later:  npm install -g wicked-vault@latest && npx wicked-vault-install
+                  (or just say "wicked-vault:update" to your agent)
+`);
+  process.exit(0);
+}
+
+console.log("wicked-vault installer\n");
 
 // Flag parser supporting both --flag=value and --flag value forms, plus
 // narrow string-boolean coercion ("true" / "false" → booleans). The ad-hoc
