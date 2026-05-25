@@ -4,6 +4,9 @@
 # the cached status), G5 (fail-closed), G8 (contract pin), G9 (mechanical
 # cross-check). Uses only real git/shell commands — no go toolchain needed.
 set -u
+# This proof asserts on stdout JSON + exit codes only; keep it deterministic and
+# free of bus side effects (see test/bus-integration.sh for the bus path).
+export WICKED_VAULT_NO_BUS=1
 REPO="${1:-$HOME/Projects/memos}"
 VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
 cd "$REPO" || { echo "no repo at $REPO"; exit 2; }

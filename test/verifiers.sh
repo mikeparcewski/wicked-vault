@@ -12,6 +12,10 @@
 # (no git init, no worktree add, no commit) and keeps the vault in the temp dir.
 set -u
 
+# Asserts on stdout JSON + exit codes only — no bus side effects here
+# (see test/bus-integration.sh for the wicked-bus path).
+export WICKED_VAULT_NO_BUS=1
+
 VAULT="node $HOME/Projects/wicked-vault/bin/wicked-vault.mjs"
 MEMOS="$HOME/Projects/memos"
 

@@ -4,7 +4,8 @@
   "description": "Local-first evidence primitive — record / verify / cross-check claim-backing artifacts with tamper-evident re-derivation. Never trusts a stored verdict.",
   "type": "module",
   "bin": {
-    "wicked-vault": "bin/wicked-vault.mjs"
+    "wicked-vault": "bin/wicked-vault.mjs",
+    "wicked-vault-install": "install.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -13,9 +14,13 @@
   "files": [
     "bin",
     "src",
-    "docs"
+    "docs",
+    "skills",
+    "install.mjs"
   ],
   "scripts": {
-    "prove": "bash test/prove-on-memos.sh"
+    "prove": "bash test/prove-on-memos.sh",
+    "prove:bus": "bash test/bus-integration.sh",
+    "install-skills": "node install.mjs"
   }
 }
