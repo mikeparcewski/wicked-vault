@@ -1,9 +1,20 @@
-# wicked-vault
+```
+██╗    ██╗██╗ ██████╗██╗  ██╗███████╗██████╗       ██╗   ██╗ █████╗ ██╗   ██╗██╗  ████████╗
+██║    ██║██║██╔════╝██║ ██╔╝██╔════╝██╔══██╗      ██║   ██║██╔══██╗██║   ██║██║  ╚══██╔══╝
+██║ █╗ ██║██║██║     █████╔╝ █████╗  ██║  ██║█████╗██║   ██║███████║██║   ██║██║     ██║
+██║███╗██║██║██║     ██╔═██╗ ██╔══╝  ██║  ██║╚════╝╚██╗ ██╔╝██╔══██║██║   ██║██║     ██║
+╚███╔███╔╝██║╚██████╗██║  ██╗███████╗██████╔╝       ╚████╔╝ ██║  ██║╚██████╔╝███████╗██║
+ ╚══╝╚══╝ ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═════╝         ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝
+```
 
-Local-first **evidence primitive**. Records claim-backing artifacts with the
-**acceptance criteria they claim to clear**, hashes both tamper-evidently, and
-checks them on demand — it never trusts a stored verdict. Sibling to
-wicked-bus / wicked-brain / wicked-testing.
+**Local-first evidence primitive. Records claim-backing evidence with the acceptance
+criteria it must clear, checks integrity deterministically, and records independent
+third-party judgments — never trusting a stored verdict, never letting work self-grade
+its own "done".**
+
+Sibling to wicked-bus / wicked-brain / wicked-testing. Works with **Claude Code**,
+**Gemini**, **Copilot**, **Codex**, **Cursor**, **Kiro**, and **Antigravity** (skills
+install across all of them).
 
 It exists to answer one question honestly: **is this claim actually backed by
 evidence that meets its bar?** — so "tests pass", "build clean", "ready to merge"
@@ -45,9 +56,8 @@ npx wicked-vault-install --path ~/.claude   # a specific config root
 This mirrors the shared wicked-bus / wicked-brain installer: `$CLAUDE_CONFIG_DIR`
 is honored, alt-config layouts are probed, and skills land as
 `wicked-vault-{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence}/`
-under each CLI's `skills/`. If
-wicked-bus is installed, the installer also registers the vault as a bus
-provider (see below).
+under each CLI's `skills/`. If wicked-bus is installed, the installer also
+registers the vault as a bus provider (see below).
 
 ## CLI
 
