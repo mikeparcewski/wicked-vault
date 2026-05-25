@@ -1,9 +1,9 @@
 ---
-name: wicked-vault:cross-check
+name: wicked-vault:cross-check-evidence
 description: Declare a consumer-authored contract and get a mechanical PASS/REJECT verdict for a scope+phase by re-deriving every required artifact. Use when answering "is this claim actually backed by evidence that still holds?" — gate logic, release readiness, or merge checks. Fail-closed when no contract is declared.
 ---
 
-# wicked-vault:cross-check
+# wicked-vault:cross-check-evidence
 
 Evaluate a whole **contract** — the set of evidence a scope+phase requires — and
 return a single mechanical verdict. Cross-check re-derives every required
@@ -21,13 +21,13 @@ should require (G9). The vault has no gate logic of its own to leak.
 - Any time a stored "ready to merge" / "tests pass" must be re-proven, not
   asserted.
 
-For a single artifact, use `wicked-vault:verify` instead.
+For a single artifact, use `wicked-vault:verify-evidence` instead.
 
 ## Step 1 — Declare the contract
 
 Write a JSON spec listing the required evidence, then declare it for a
 scope+phase. A claim with a `verifier` pin also constrains how its evidence may
-be recorded (G8 — see `wicked-vault:record`).
+be recorded (G8 — see `wicked-vault:record-evidence`).
 
 ```jsonc
 // contract.json
@@ -51,7 +51,7 @@ the contract produces a new version (G8 pinning).
 
 ## Step 2 — Record the evidence
 
-Record one artifact per required claim (`wicked-vault:record`). Each `claim_id`
+Record one artifact per required claim (`wicked-vault:record-evidence`). Each `claim_id`
 must match the contract. The **latest active** artifact for a claim wins.
 
 ## Step 3 — Cross-check

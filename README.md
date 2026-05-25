@@ -32,7 +32,8 @@ npx wicked-vault-install --path ~/.claude   # a specific config root
 
 This mirrors the shared wicked-bus / wicked-brain installer: `$CLAUDE_CONFIG_DIR`
 is honored, alt-config layouts are probed, and skills land as
-`wicked-vault-{init,record,verify,cross-check}/` under each CLI's `skills/`. If
+`wicked-vault-{init,record-evidence,verify-evidence,cross-check-evidence}/`
+under each CLI's `skills/`. If
 wicked-bus is installed, the installer also registers the vault as a bus
 provider (see below).
 

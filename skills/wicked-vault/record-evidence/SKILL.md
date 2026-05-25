@@ -1,9 +1,9 @@
 ---
-name: wicked-vault:record
+name: wicked-vault:record-evidence
 description: Record a claim-backing artifact in the vault and attach a deterministic verifier. Use when capturing evidence that "tests pass", "build clean", a commit exists, or a file's contents back a claim — and when replacing stale evidence via supersede. Covers --run vs --artifact, verifier syntax, and contract pinning.
 ---
 
-# wicked-vault:record
+# wicked-vault:record-evidence
 
 Capture an artifact, hash it tamper-evidently, and attach a verifier that can
 **re-derive** its verdict later. The vault does the capture itself — it never
@@ -102,7 +102,7 @@ the old entry is flipped, so there is always an active artifact for the claim.
 
 ## Contract pinning (G8)
 
-If a contract pins this claim (see `wicked-vault:cross-check`), `record` rejects
+If a contract pins this claim (see `wicked-vault:cross-check-evidence`), `record` rejects
 a downgrade — a `kind`, `source`, or `verifier` that differs from the pin throws
 a `G8 pin violation`. This stops a weaker verifier from being swapped in to make
 a claim pass.

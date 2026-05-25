@@ -48,8 +48,8 @@ commit evidence.
 
 ## Next steps
 
-- `wicked-vault:record` — capture an artifact and attach a verifier.
-- `wicked-vault:cross-check` — declare a contract and get a mechanical verdict.
+- `wicked-vault:record-evidence` — capture an artifact and attach a verifier.
+- `wicked-vault:cross-check-evidence` — declare a contract and get a mechanical verdict.
 
 ## Output
 

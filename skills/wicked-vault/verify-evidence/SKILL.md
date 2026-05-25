@@ -1,9 +1,9 @@
 ---
-name: wicked-vault:verify
+name: wicked-vault:verify-evidence
 description: Re-derive a single recorded artifact's verdict and check tamper-evidence. Use when confirming a specific piece of evidence still holds, detecting that a payload or envelope was modified, or checking a claim before trusting it. Never trusts the cached status.
 ---
 
-# wicked-vault:verify
+# wicked-vault:verify-evidence
 
 Re-derive the verdict for **one** recorded artifact by id. The vault recomputes
 the payload and envelope hashes from the stored bytes and **re-runs the
@@ -17,7 +17,7 @@ verifier** — it never reads the status that was stored at record time (G3).
 - Before trusting any single piece of evidence in a decision.
 
 To check a whole contract at once instead of one artifact, use
-`wicked-vault:cross-check`.
+`wicked-vault:cross-check-evidence`.
 
 ## Verify
 
