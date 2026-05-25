@@ -19,7 +19,8 @@ $VAULT init
 
 echo; echo "### 1. HONEST record — real HEAD commit; verifier regex_match 40-hex"
 H=$($VAULT record --scope demo --phase build --claim head-commit --kind test-run \
-      --source "git rev-parse HEAD" --verifier "regex_match:[0-9a-f]{40}" --run)
+      --source "git rev-parse HEAD" --criteria "HEAD resolves to a 40-hex commit sha" \
+      --verifier "regex_match:[0-9a-f]{40}" --run)
 echo "$H"
 HID=$(printf '%s' "$H" | field id)
 
@@ -28,7 +29,7 @@ $VAULT verify "$HID"; echo "exit=$?"
 
 echo; echo "### 2. FAILING record — command 'false' (exit 1), claim 'tests-pass', verifier exit_code_eq:0"
 F=$($VAULT record --scope demo --phase build --claim tests-pass --kind test-run \
-      --source "false" --verifier "exit_code_eq:0" --run)
+      --source "false" --criteria "the test command exits 0" --verifier "exit_code_eq:0" --run)
 echo "$F"
 FID=$(printf '%s' "$F" | field id)
 echo "(status_at_record is informational: $(printf '%s' "$F" | field status_at_record))"
@@ -64,7 +65,7 @@ $VAULT cross-check --scope demo --phase build; echo "exit=$?"
 
 echo; echo "### 6. HONEST FIX — record a genuinely passing tests-pass artifact ('true'), re-cross-check"
 $VAULT record --scope demo --phase build --claim tests-pass --kind test-run \
-      --source "true" --verifier "exit_code_eq:0" --run > /dev/null
+      --source "true" --criteria "the test command exits 0" --verifier "exit_code_eq:0" --run > /dev/null
 echo "cross-check again -> expect overall=PASS exit=0 (latest active passing artifact wins):"
 $VAULT cross-check --scope demo --phase build; echo "exit=$?"
 

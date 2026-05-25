@@ -1,7 +1,7 @@
 {
   "name": "wicked-vault",
-  "version": "0.1.0",
-  "description": "Local-first evidence primitive — record / verify / cross-check claim-backing artifacts with tamper-evident re-derivation. Never trusts a stored verdict.",
+  "version": "0.2.0",
+  "description": "Local-first evidence primitive — record evidence with its acceptance criteria, re-derive integrity deterministically, and record independent third-party judgments. Never trusts a stored verdict, never lets work self-grade its own \"done\".",
   "type": "module",
   "bin": {
     "wicked-vault": "bin/wicked-vault.mjs",
@@ -20,6 +20,8 @@
   ],
   "scripts": {
     "prove": "bash test/prove-on-memos.sh",
+    "prove:verifiers": "bash test/verifiers.sh",
+    "prove:attestation": "bash test/attestation.sh",
     "prove:bus": "bash test/bus-integration.sh",
     "install-skills": "node install.mjs"
   }

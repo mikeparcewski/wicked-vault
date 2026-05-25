@@ -18,9 +18,11 @@ export function canonical(obj) {
   return JSON.stringify(sortKeys(obj));
 }
 
-// G2 — the envelope hash binds the identifying tuple to the payload hash.
-// Mutating ANY of these fields (or the payload) changes the envelope, so a
-// later `verify` recomputation will diverge from the stored value.
+// G2 — the envelope hash binds the identifying tuple (now including the
+// acceptance-criteria hash) to the payload hash. Mutating ANY of these fields,
+// the criteria, or the payload changes the envelope, so a later `verify`
+// recomputation will diverge from the stored value. The verifier is optional
+// (ADR-0002: it became a composable sub-check, not the whole story).
 export function envelopeHash(fields) {
   const tuple = {
     scope: fields.scope,
@@ -28,7 +30,10 @@ export function envelopeHash(fields) {
     claim_id: fields.claim_id,
     kind: fields.kind,
     source: fields.source,
-    verifier: { kind: fields.verifier.kind, params: fields.verifier.params || {} },
+    verifier: fields.verifier
+      ? { kind: fields.verifier.kind, params: fields.verifier.params || {} }
+      : null,
+    criteria_sha256: fields.criteria_sha256,
     payload_sha256: fields.payload_sha256,
   };
   return sha256(Buffer.from(canonical(tuple), 'utf8'));

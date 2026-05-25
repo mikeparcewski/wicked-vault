@@ -1,12 +1,22 @@
 # wicked-vault — Interaction & Contract Specification
 
-**Status:** v1 — council-reviewed and revised (see `adr/0001-standalone-and-council-revisions.md`).
-Standalone product confirmed. Defines the contracts every consumer integrates
-against. Sibling to wicked-bus / wicked-brain / wicked-testing.
+**Status:** v2 — council-reviewed twice (see `adr/0001-…` and
+`adr/0002-independent-evaluation-and-criteria-binding.md`). Standalone product
+confirmed. Defines the contracts every consumer integrates against. Sibling to
+wicked-bus / wicked-brain / wicked-testing.
 
 > v1 changed §4 (G3/G4 honest scoping + new G9), §5 (scope cut to 5
 > deterministic verifiers; `llm_eval` removed), §6 (per-entry storage), and §12
 > (decisions resolved) per the council. Rationale + dissent: ADR-0001.
+>
+> **v2 (ADR-0002, council 5–0 Accept-with-Revisions)** adds an *independent
+> evaluation* tier on top of the deterministic core: acceptance criteria are
+> mandatory and hashed into the envelope (§3.1); a new **`opinion_attestation`**
+> data contract (§3.4) holds non-reproducible model judgments, kept strictly
+> distinct from deterministic verifier results; new invariant **G10**
+> (attestation-chain trust, §4); `verify` is two-tier with an integrity-only
+> default (§8); new events (§7). The Node CLI still **never calls a model** —
+> G7 holds; the judge runs in the `verify-evidence` skill.
 
 wicked-vault is the **evidence primitive**: it records claim-backing
 artifacts, hashes them tamper-evidently, and *re-derives* their status on
@@ -75,10 +85,13 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
 | `claim_id` | string | the claim this artifact backs |
 | `kind` | enum | `test-run`·`typecheck`·`build`·`pr-check`·`http-probe`·`review-verdict`·`custom` |
 | `source` | string | provenance: the command, file path, or URL that produced the payload — **pinned by the contract** (G8) |
-| `verifier` | `{kind, params}` | the typed check (see §5) |
+| `verifier` | `{kind, params}`? | optional deterministic sub-check (see §5) — a composable signal an evaluator may cite, no longer the whole story |
+| `acceptance_criteria` | string | **mandatory (G10/D1)** — the bar this evidence claims to clear; free-form text or `@file`. Frozen to the evidence. |
+| `criteria_sha256` | string | hash of `acceptance_criteria`; bound into the envelope (anti-downgrade) |
+| `criteria_authored_by` | enum | `contract` (trusted — pinned via `declare-contract`) · `record` (worker-supplied — weaker provenance, auditable) |
 | `payload_sha256` | string | hash of the captured payload blob |
 | `payload_ref` | string | `payloads/<sha256>` (content-addressed) |
-| `envelope_hash` | string | sha256 over canonical(`scope,phase,claim_id,kind,source,verifier,payload_sha256`) (G2) |
+| `envelope_hash` | string | sha256 over canonical(`scope,phase,claim_id,kind,source,verifier,criteria_sha256,payload_sha256`) (G2) — **now binds the criteria** |
 | `status_at_record` | enum | verifier result computed **once** at record — informational; `verify` NEVER reads it (G3) |
 | `state` | enum | `active` · `superseded` |
 | `supersedes` | string? | prior artifact id |
@@ -110,6 +123,34 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
 }
 ```
 
+### 3.4 Opinion attestation (independent judgment — append-only, NON-reproducible)
+
+A distinct type from §3.1/§3.3 — **never commingled** with deterministic
+verifier results (council revision #1). It records that an *independent* judge
+evaluated the frozen criteria against the frozen evidence at a point in time.
+Its trust is G10 (attestation-chain), not G3 (re-derivation).
+
+| Field | Type | Notes |
+|---|---|---|
+| `attestation_id` | string (ULID) | server-minted |
+| `artifact_id` | string | the evidence it judges |
+| `opinion` | enum | `pass` · `reject` · `unclear` — deliberately NOT named `verdict`/`status` |
+| `rationale` | string | the judge's reasoning (structured output, not free-form prose injection) |
+| `evaluator` | string | the judging identity — **MUST differ from the artifact's `created_by`** (G10/D4) |
+| `model` | string | provider/version, e.g. `gemini/2.5-pro` |
+| `prompt_hash` | string? | hash of the prompt template used |
+| `sampling` | object? | `{temperature, …}` — provenance for disagreement analysis |
+| `evidence_sha256` / `criteria_sha256` | string | the frozen inputs judged — used to flag `stale` if the artifact changed |
+| `attestation_hash` | string | sha256 over the canonical attestation tuple — tamper-evident (G2-style) |
+| `created_at` | ts | when judged |
+
+Stored append-only at `attestations/<artifact_id>/<attestation_id>.json` (G6).
+Multiple attestations per artifact are expected and retained — they surface
+evaluator disagreement over identical inputs. `verify` returns the *latest* one
+for reference, flagged `stale` if `evidence_sha256`/`criteria_sha256` no longer
+match the artifact. **It is never re-derived; it is never trusted as
+reproducible.**
+
 ---
 
 ## 4. Guarantee invariants (the load-bearing promises)
@@ -117,10 +158,13 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
 - **G1 server-minted ids** — the caller cannot supply or forge an id.
 - **G2 envelope hash** — bound over the identifying tuple + payload hash;
   recomputed and checked on *every* `verify`. Any mutation ⇒ `hash_ok:false`.
-- **G3 re-derivation** — `verify` re-runs the verifier against the payload and
-  returns a fresh status. It **never** reads `status_at_record`. (BA-1 defense.)
-  *Bound:* G3 proves the recorded payload still verifies; it does not re-prove
-  the payload was captured honestly — that is G4's (bounded) job.
+- **G3 re-derivation (integrity tier)** — `verify` re-runs the deterministic
+  verifier against the payload and re-checks the envelope, returning a fresh
+  integrity status. It **never** reads `status_at_record`. (BA-1 defense.)
+  *Bound:* G3 proves the recorded payload+criteria still verify and are
+  untampered; it does not re-prove the payload was captured honestly (G4), and
+  it does **not** cover the judgment tier — independent judgments are governed by
+  G10, not re-derived.
 - **G4 honest recording, NOT sandboxed capture** — `record --run` executes the
   source and captures its output; `record --artifact <file>` records
   caller-supplied content. In both cases the vault hashes the payload and runs
@@ -150,6 +194,20 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
   pin? The vault decides *whether the contract is satisfied*, never *what the
   contract should require*. This is what keeps `cross-check` a primitive and not
   gate-decision policy — answering the council's Q4.
+- **G10 attestation-chain trust (the judgment tier — ADR-0002)** — an
+  independent judgment's trust is the trust of its *attestation chain* (frozen
+  `{criteria, evidence}` + `evaluator` identity + `model`/`prompt`/`sampling`
+  provenance + tamper-evident `attestation_hash`), **not** re-derivation. The
+  integrity tier (G1–G9) and the judgment tier (G10) are **distinct guarantee
+  types and are never represented as the same kind of result.** Corollaries:
+  (a) acceptance criteria are mandatory and bound into the envelope, frozen to
+  the evidence (anti-downgrade); (b) the model runs only in the orchestration
+  layer (`verify-evidence` skill) — the CLI never calls a model, so G7 holds;
+  (c) `attest` is fail-closed if the frozen inputs no longer hash-match, and
+  rejects when `evaluator == created_by`; (d) judgments are non-reproducible by
+  design — "never trust the cached verdict" here means *re-evaluate
+  independently*, complementary to G3's *re-derive deterministically*. Threat
+  model in §5a.
 
 ---
 
@@ -181,14 +239,35 @@ PR — never agent-controlled), and G7 is declared inapplicable for the tier.
 Sequenced here because the ci-aware-merge discipline needs `pr_check_status` —
 but it does not belong in the deterministic founding spec.
 
-**Removed: `llm_eval`.** A probabilistic judge is neither pure, deterministic,
-nor re-derivable — registering it falsifies G7 at the type level (council
-disqualifier). If "an LLM judges this artifact" is ever wanted, it is its own
-spec with its own non-G7 semantics, not a verifier kind here.
+**`llm_eval` is still NOT a verifier kind.** A probabilistic judge is neither
+pure, deterministic, nor re-derivable — registering it as a verifier would
+falsify G7 at the type level (ADR-0001 council disqualifier, upheld). ADR-0002
+adds independent judgment **at a different layer**: the model runs in the
+`verify-evidence` *skill*, never in the CLI, and its output is recorded as an
+`opinion_attestation` (§3.4) under G10 — a distinct, non-reproducible type, not
+a verifier result. G7's boundary is intact; the capability lives above it.
 
 **Custom verifiers** register via `verifiers/<kind>.{js,py}` exporting the
 interface + a `determinism` declaration. Unknown kind at `verify` ⇒ `ERROR`
 (G5), never a silent pass.
+
+### 5a. Judgment-tier threat model (ADR-0002 D7)
+
+The evidence payload and (worker-supplied) acceptance criteria are
+attacker-influenceable inputs to the judge. Stated plainly:
+
+- **T1 — lax-bar self-grade:** a worker authors weak criteria → guaranteed
+  `pass`. *Mitigation:* contract-pinned criteria (`criteria_authored_by:
+  contract`) are the trusted path; worker-supplied criteria are recorded as
+  `criteria_authored_by: record` and treated as a weaker provenance class.
+- **T2 — payload/criteria prompt injection:** content steers the judge.
+  *Mitigations the skill MUST apply:* feed evidence + criteria as **escaped,
+  quoted data**, never as instructions; require a **structured output schema**
+  (opinion + rationale + cited sub-checks); **`unclear`/refuse on
+  instruction-conflict**; **fail-closed** on unparseable evaluator output.
+- **Residual risk (honest scoping, per ADR-0001 Q6):** a capable injection may
+  still flip a judgment. The attestation chain makes inputs + evaluator
+  auditable after the fact; it does not prevent T2 in v1.
 
 
 ---
@@ -230,13 +309,17 @@ Emits (domain `vault`):
 
 | Event | Payload | Subscribers |
 |---|---|---|
-| `vault:artifact:recorded` | `{id, scope, phase, claim_id, kind, status_at_record}` | testing, dashboards |
+| `vault:artifact:recorded` | `{id, scope, phase, claim_id, kind, criteria_authored_by}` | testing, dashboards |
 | `vault:artifact:verified` | `{id, hash_ok, status}` | garden triggers |
 | `vault:crosscheck:completed` | `{scope, phase, overall, contract_version}` | garden, testing |
 | `vault:artifact:superseded` | `{old_id, new_id}` | testing |
 | `vault:verify:failed` | `{id, reason}` | dashboards, alerting |
+| `wicked.evidence.attested` | `{artifact_id, attestation_id, opinion, evaluator, model, stale}` | garden, testing, dashboards |
+| `wicked.claim.evaluated` | `{scope, phase, claim_id, opinion, evaluator}` | garden gate (opt-in tier) |
 
 Vault is a pure **producer** here (mirrors `the-vault`'s subscriber-clean shape).
+Attestation events (G10 tier) carry `evaluator`/`model` so subscribers can weigh
+provenance; they are explicitly *not* deterministic-verdict events.
 
 ---
 
@@ -247,21 +330,26 @@ scripts, Node consumers, CI shell all call it identically).
 
 ```
 wicked-vault record   --scope S --phase P --claim C --kind K \
-                      --source "<cmd|file|url>" --verifier "exit_code_eq:0" \
-                      (--run | --artifact <file>)            -> {id, envelope_hash, status_at_record}
-wicked-vault verify   <artifact-id>                          -> {id, hash_ok, status, rederived:true}  (exit 0 iff pass+hash_ok)
-wicked-vault cross-check --scope S --phase P (--from-contract | --claims <file>)
-                                                             -> Verdict   (exit 0 iff overall PASS)
+                      --source "<cmd|file|url>" --criteria "<text|@file>" \
+                      [--verifier "exit_code_eq:0"] (--run | --artifact <file>)
+                                                             -> {id, envelope_hash, criteria_authored_by, status_at_record?}
+wicked-vault verify   <artifact-id>                          -> {id, hash_ok, status, rederived:true, latest_attestation?}  (integrity tier; exit 0 iff pass+hash_ok)
+wicked-vault inspect  <artifact-id>                          -> {criteria, evidence, hash_ok, raw}  (what the skill feeds the judge)
+wicked-vault attest   <artifact-id> --opinion <pass|reject|unclear> --rationale <t> \
+                      --evaluator <id> --model <prov/ver> [--prompt-hash h] [--sampling <json>]
+                                                             -> {attestation_id, attestation_hash}  (fail-closed if tampered; reject if evaluator==created_by)
+wicked-vault attestations <artifact-id>                      -> [OpinionAttestation…]  (append-only log)
+wicked-vault cross-check --scope S --phase P [--integrity-only | --with-attestations]
+                                                             -> Verdict   (default --integrity-only; exit 0 iff overall PASS)
 wicked-vault supersede <artifact-id> (--run|--artifact …)    -> {new_id, old_id}
 wicked-vault declare-contract --scope S --phase P --spec <f> -> {contract_version}
-wicked-vault get-contract --scope S --phase P                -> Contract
 wicked-vault list     --scope S [--phase P]                  -> [Artifact…]
-wicked-vault history  --claim C                              -> [Artifact…]  (supersede chain)
-wicked-vault reindex                                         -> rebuilds index.sqlite from entries/
 ```
 
 Vault root auto-detected by walking up to `.wicked-vault/`; `--cwd` overrides.
-Every command accepts `--json` and exits non-zero on `FAIL`/`ERROR` (G5).
+Every command emits JSON and exits non-zero on `FAIL`/`ERROR` (G5). The model
+judge runs in the `wicked-vault:verify-evidence` skill, which orchestrates
+`inspect → independent eval → attest`; the CLI itself never calls a model.
 
 ---
 
@@ -328,3 +416,6 @@ All resolved by the council + ADR-0001.
 | D5 | source of truth | **`entries/<ulid>.json` (one file per artifact)** + content-addressed payloads; sqlite derived. *Supersedes v0 single-manifest.* | council Q2 (mandatory under D0) |
 | D6 | gate boundary | **consumer authors contract, vault evaluates mechanically** (G9) — `cross-check` retained | council Q4 |
 | D7 | capture model | **G4 = honest recording, not sandboxed capture**; harness owns execution isolation (as command_iq's runtime did) | council Q6 |
+| D8 | independent evaluation | **two-tier: deterministic CLI integrity + skill-orchestrated independent judgment** recorded as `opinion_attestation` under G10; CLI never calls a model (G7 upheld) | ADR-0002, council 5–0 |
+| D9 | acceptance criteria | **mandatory, hashed into the envelope, frozen to the evidence**; contract-pinned criteria are the trusted path, worker-supplied are attributed + weaker | ADR-0002 D1 (+Gemini escalation) |
+| D10 | eval timing / gating | **eval runs once/on-demand, not every verify**; `verify` integrity-only; `cross-check --with-attestations` is opt-in; `--integrity-only` default & CI-safe | ADR-0002 D3 (council disqualified live-every-verify) |

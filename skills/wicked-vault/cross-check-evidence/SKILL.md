@@ -33,8 +33,9 @@ be recorded (G8 — see `wicked-vault:record-evidence`).
 // contract.json
 {
   "required_evidence": [
-    { "claim_id": "tests-pass",  "kind": "test-run", "verifier": { "kind": "exit_code_eq" } },
-    { "claim_id": "no-secrets",  "kind": "test-run", "verifier": { "kind": "not_contains" } },
+    { "claim_id": "tests-pass",  "kind": "test-run", "criteria": "all unit tests pass (exit 0)", "verifier": { "kind": "exit_code_eq" } },
+    { "claim_id": "no-secrets",  "kind": "test-run", "criteria": "no secrets in the diff", "verifier": { "kind": "not_contains" } },
+    { "claim_id": "design-ok",   "kind": "review-verdict", "criteria": "the change adequately addresses the documented failure modes", "require_attestation": true },
     { "claim_id": "changelog",   "kind": "file",     "required": false }
   ]
 }
@@ -45,20 +46,32 @@ npx wicked-vault declare-contract --scope checkout --phase release --spec contra
 # -> { "contract_version": "<16-char hash>" }
 ```
 
-`required: false` makes a claim optional — its absence is `PASS`, not `MISSING`.
-The `contract_version` is a hash of the required-evidence set, so any change to
-the contract produces a new version (G8 pinning).
+- `required: false` makes a claim optional — its absence is `PASS`, not `MISSING`.
+- **`criteria`** pins the acceptance criteria for the claim. This is the
+  **trusted path** — criteria authored in the contract (separately from the
+  worker), so a recorded artifact must match it (`criteria_authored_by:
+  contract`). Strongly preferred over worker-supplied criteria.
+- **`require_attestation: true`** marks a claim that needs an independent
+  judgment (the judgment tier) — see Step 4. Use it for free-form criteria a
+  deterministic verifier can't express ("adequately addresses the failure
+  modes").
+- The `contract_version` is a hash of the required-evidence set (G8 pinning).
 
 ## Step 2 — Record the evidence
 
 Record one artifact per required claim (`wicked-vault:record-evidence`). Each `claim_id`
-must match the contract. The **latest active** artifact for a claim wins.
+must match the contract, and `--criteria` must match the contract's pin. The
+**latest active** artifact for a claim wins.
 
-## Step 3 — Cross-check
+## Step 3 — Cross-check (integrity tier — the default, CI-safe)
 
 ```bash
 npx wicked-vault cross-check --scope checkout --phase release
 ```
+
+This is **`--integrity-only`** by default: deterministic, offline, no model
+calls — safe to put on a CI gate. It evaluates hash integrity + any
+deterministic verifier per claim.
 
 ```json
 {
@@ -79,13 +92,32 @@ Exit `0` **iff** `overall === "PASS"`. Per-claim `result` is one of:
 
 | result | meaning |
 |---|---|
-| `PASS` | required artifact present, hash intact, verifier passed |
+| `PASS` | required artifact present, hash intact, verifier passed (and — in `--with-attestations` — an independent `pass` opinion when `require_attestation`) |
 | `MISSING` | a required claim has no active artifact |
 | `FAIL` | artifact present but tamper or verifier failed |
+| `UNATTESTED` | `require_attestation` claim has no independent opinion recorded |
+| `REJECT` | `require_attestation` claim has a non-pass / stale independent opinion |
 | `ERROR` | verifier-kind pin mismatch against the contract |
 
 `overall` is `PASS` only if every claim is `PASS`; `ERROR` if any claim errored;
 otherwise `REJECT`.
+
+## Step 4 — Judgment tier (opt-in, NOT for the default CI gate)
+
+```bash
+npx wicked-vault cross-check --scope checkout --phase release --with-attestations
+```
+
+`--with-attestations` consults the latest independent opinion per claim (the
+attestations recorded by `wicked-vault:verify-evidence`). For a claim with
+`require_attestation: true`, it `PASS`es only when integrity passes **and** a
+non-stale, independent `pass` opinion exists; otherwise `UNATTESTED` / `REJECT`.
+For other claims the opinion is advisory (surfaced, doesn't change the result).
+
+This mode is **not deterministic and not for the default gate** — opinions come
+from a model and are point-in-time. Run `wicked-vault:verify-evidence` first to
+produce the attestations, then use this mode for a release sign-off that
+requires a third-party judgment. Keep `--integrity-only` on the fast CI path.
 
 ## Fail-closed (G5)
 

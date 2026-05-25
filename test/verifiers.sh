@@ -43,7 +43,8 @@ echo "=== not_contains ==="
 
 echo "# PASS: forbidden pattern ABSENT from a clean build log"
 NC_PASS=$($VAULT record --scope vtest --phase build --claim no-errors --kind test-run \
-  --source "echo build succeeded with no issues" --verifier "not_contains:FATAL" --run)
+  --source "echo build succeeded with no issues" --criteria "no FATAL in the build log" \
+  --verifier "not_contains:FATAL" --run)
 echo "$NC_PASS"
 NC_PASS_ID=$(printf '%s' "$NC_PASS" | field id)
 $VAULT verify "$NC_PASS_ID"; RC=$?
@@ -54,7 +55,8 @@ echo
 
 echo "# FAIL: forbidden pattern PRESENT in the log"
 NC_FAIL=$($VAULT record --scope vtest --phase build --claim no-errors --kind test-run \
-  --source "echo build hit a FATAL stop" --verifier "not_contains:FATAL" --run)
+  --source "echo build hit a FATAL stop" --criteria "no FATAL in the build log" \
+  --verifier "not_contains:FATAL" --run)
 echo "$NC_FAIL"
 NC_FAIL_ID=$(printf '%s' "$NC_FAIL" | field id)
 $VAULT verify "$NC_FAIL_ID"; RC=$?
@@ -77,7 +79,8 @@ if [ -d "$MEMOS/.git" ]; then
 
   echo "# PASS: a real HEAD sha exists in the repo objects"
   CE_PASS=$($VAULT record --scope vtest --phase review --claim head-real --kind custom \
-    --source "git rev-parse HEAD" --verifier "commit_exists:$REAL_SHA" \
+    --source "git rev-parse HEAD" --criteria "the recorded sha exists as a commit in the repo" \
+    --verifier "commit_exists:$REAL_SHA" \
     --artifact <(printf '%s' "$REAL_SHA"))
   echo "$CE_PASS"
   CE_PASS_ID=$(printf '%s' "$CE_PASS" | field id)
@@ -90,7 +93,8 @@ if [ -d "$MEMOS/.git" ]; then
   echo "# FAIL: a fabricated sha does not exist"
   FAKE_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   CE_FAIL=$($VAULT record --scope vtest --phase review --claim head-fake --kind custom \
-    --source "echo fabricated" --verifier "commit_exists:$FAKE_SHA" \
+    --source "echo fabricated" --criteria "the recorded sha exists as a commit in the repo" \
+    --verifier "commit_exists:$FAKE_SHA" \
     --artifact <(printf '%s' "$FAKE_SHA"))
   echo "$CE_FAIL"
   CE_FAIL_ID=$(printf '%s' "$CE_FAIL" | field id)
@@ -113,7 +117,7 @@ if command -v jq >/dev/null 2>&1; then
 
   echo "# PASS: truthy predicate over the JSON capture (.exit_code == 0)"
   JQ_PASS=$($VAULT record --scope vtest --phase test --claim jq-truthy --kind test-run \
-    --source "echo hello" --verifier "jq_pred:.exit_code == 0" --run)
+    --source "echo hello" --criteria "captured exit_code is 0" --verifier "jq_pred:.exit_code == 0" --run)
   echo "$JQ_PASS"
   JQ_PASS_ID=$(printf '%s' "$JQ_PASS" | field id)
   $VAULT verify "$JQ_PASS_ID"; RC=$?
@@ -124,7 +128,7 @@ if command -v jq >/dev/null 2>&1; then
 
   echo "# FAIL: falsy predicate over the same shape (.exit_code == 99)"
   JQ_FAIL=$($VAULT record --scope vtest --phase test --claim jq-falsy --kind test-run \
-    --source "echo hello" --verifier "jq_pred:.exit_code == 99" --run)
+    --source "echo hello" --criteria "captured exit_code is 99" --verifier "jq_pred:.exit_code == 99" --run)
   echo "$JQ_FAIL"
   JQ_FAIL_ID=$(printf '%s' "$JQ_FAIL" | field id)
   $VAULT verify "$JQ_FAIL_ID"; RC=$?
@@ -136,7 +140,7 @@ else
   echo "Per G5 (fail-closed), jq_pred must return status:error — NOT a silent pass."
   echo "This is the CORRECT behavior, not a bug."
   JQ_ERR=$($VAULT record --scope vtest --phase test --claim jq-noerr --kind test-run \
-    --source "echo hello" --verifier "jq_pred:.exit_code == 0" --run)
+    --source "echo hello" --criteria "captured exit_code is 0" --verifier "jq_pred:.exit_code == 0" --run)
   echo "$JQ_ERR"
   JQ_ERR_STATUS=$(printf '%s' "$JQ_ERR" | field status_at_record)
   JQ_ERR_ID=$(printf '%s' "$JQ_ERR" | field id)

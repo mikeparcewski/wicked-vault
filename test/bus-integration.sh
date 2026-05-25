@@ -30,7 +30,7 @@ echo "=== 1. graceful degradation (bus NOT resolvable from a bare temp dir) ==="
 cd "$WORK" || exit 2
 $VAULT init >/dev/null
 OUT=$($VAULT record --scope t --phase build --claim c --kind test-run \
-  --source "true" --verifier "exit_code_eq:0" --run); RC=$?
+  --source "true" --criteria "exits 0" --verifier "exit_code_eq:0" --run); RC=$?
 echo "$OUT"
 if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q '"id"'; then
   echo "  -> PASS: record works with no bus, exit 0, clean JSON"
@@ -48,15 +48,17 @@ if [ -f "$BUS_DIR/lib/validate.js" ]; then
       ['wicked.evidence.recorded',   'vault.record'],
       ['wicked.evidence.superseded', 'vault.supersede'],
       ['wicked.evidence.tampered',   'vault.tamper'],
+      ['wicked.evidence.attested',   'vault.attest'],
       ['wicked.contract.declared',   'vault.contract'],
       ['wicked.contract.checked',    'vault.cross_check'],
+      ['wicked.claim.evaluated',     'vault.cross_check'],
     ];
     for (const [event_type, subdomain] of events) {
       validateEvent({ event_type, domain: 'wicked-vault', subdomain, payload: {} },
                     { max_payload_bytes: 1048576 });
       console.log('  ok:', event_type, '(' + subdomain + ')');
     }
-  " && echo "  -> PASS: all 5 vault events satisfy the bus schema" \
+  " && echo "  -> PASS: all 7 vault events satisfy the bus schema" \
     || { echo "  -> FAIL: an event was rejected by validateEvent"; FAILED=1; }
 else
   echo "  SKIP: $BUS_DIR/lib/validate.js not found"
@@ -89,11 +91,15 @@ JS
 
 cd "$PROJ" || exit 2
 $VAULT init >/dev/null
-$VAULT record --scope ship --phase release --claim tests-pass --kind test-run \
-  --source "true" --verifier "exit_code_eq:0" --run >/dev/null
+AID=$($VAULT record --scope ship --phase release --claim tests-pass --kind test-run \
+  --source "true" --criteria "all unit tests pass (exit 0)" --verifier "exit_code_eq:0" --run \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+# independent attestation (evaluator distinct from $USER) -> wicked.evidence.attested
+$VAULT attest "$AID" --opinion pass --rationale "independently confirmed" \
+  --evaluator "council-reviewer" --model "gemini/2.5-pro" >/dev/null
 cat > "$PROJ/contract.json" <<'JSON'
 { "required_evidence": [
-  { "claim_id": "tests-pass", "kind": "test-run",
+  { "claim_id": "tests-pass", "kind": "test-run", "criteria": "all unit tests pass (exit 0)",
     "verifier": { "kind": "exit_code_eq" }, "required": true } ] }
 JSON
 $VAULT declare-contract --scope ship --phase release --spec "$PROJ/contract.json" >/dev/null
@@ -106,7 +112,7 @@ node -e "
   const lines = fs.readFileSync(process.env.VAULT_EMIT_LOG, 'utf8').trim().split('\n').filter(Boolean);
   const evs = lines.map(JSON.parse);
   const seen = new Set(evs.map(e => e.event_type));
-  const need = ['wicked.evidence.recorded', 'wicked.contract.declared', 'wicked.contract.checked'];
+  const need = ['wicked.evidence.recorded', 'wicked.evidence.attested', 'wicked.contract.declared', 'wicked.contract.checked'];
   const allWickedVault = evs.every(e => e.domain === 'wicked-vault');
   const missing = need.filter(t => !seen.has(t));
   if (missing.length || !allWickedVault) {
@@ -116,7 +122,11 @@ node -e "
   if (cc.payload.overall !== 'PASS') {
     console.error('  -> FAIL: cross-check payload.overall=' + cc.payload.overall); process.exit(1);
   }
-  console.log('  -> PASS: record + declare-contract + cross-check emitted; domain=wicked-vault; overall=PASS');
+  const att = evs.find(e => e.event_type === 'wicked.evidence.attested');
+  if (att.payload.opinion !== 'pass' || att.payload.evaluator !== 'council-reviewer') {
+    console.error('  -> FAIL: attested event payload wrong', att.payload); process.exit(1);
+  }
+  console.log('  -> PASS: record + attest + declare-contract + cross-check emitted; domain=wicked-vault; overall=PASS');
 " || FAILED=1
 echo
 

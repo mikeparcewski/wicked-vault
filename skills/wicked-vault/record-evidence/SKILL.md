@@ -25,7 +25,8 @@ stderr, captured_at}` as the payload.
 ```bash
 npx wicked-vault record \
   --scope checkout --phase build --claim tests-pass --kind test-run \
-  --source "npm test" --verifier "exit_code_eq:0" --run
+  --source "npm test" --criteria "all unit tests pass (exit 0)" \
+  --verifier "exit_code_eq:0" --run
 ```
 
 ### 2. Hash an existing file (`--artifact`)
@@ -36,10 +37,12 @@ The vault reads the file and stores its bytes as the payload.
 npx wicked-vault record \
   --scope checkout --phase build --claim coverage-report --kind file \
   --source "coverage/summary.json" --artifact coverage/summary.json \
+  --criteria "line coverage is at least 80%" \
   --verifier "jq_pred:.total.lines.pct >= 80"
 ```
 
-`record` requires **either** `--run` **or** `--artifact`.
+`record` requires **either** `--run` **or** `--artifact`, and **always**
+`--criteria`.
 
 ## Required fields
 
@@ -50,7 +53,25 @@ npx wicked-vault record \
 | `--claim` | claim id this artifact backs (e.g. `tests-pass`) |
 | `--kind` | artifact kind (e.g. `test-run`, `file`, `commit`) |
 | `--source` | the command (`--run`) or path/description (`--artifact`) |
-| `--verifier` | how the verdict is re-derived (see below) |
+| `--criteria` | **mandatory** — the acceptance criteria this evidence claims to clear; inline text or `@file`. Hashed into the envelope and frozen to the evidence (G10) |
+| `--verifier` | *optional* deterministic sub-check (see below) — a composable signal an independent evaluator can cite |
+
+## Acceptance criteria are mandatory (G10/D1)
+
+Every artifact must state the bar it claims to clear — `record` rejects evidence
+with no `--criteria`. The criteria are hashed into the envelope, so the bar is
+**frozen to the evidence**: the same evidence can never later be judged against
+weaker criteria (anti-downgrade).
+
+The **trusted path** is contract-pinned criteria: when `declare-contract` pins
+`criteria` for the claim, a matching `--criteria` is stamped
+`criteria_authored_by: contract`. Worker-supplied criteria are stamped
+`record` (a weaker provenance class — see `wicked-vault:verify-evidence`'s
+threat model). A `--criteria` that contradicts a contract pin is a G8 downgrade
+and is rejected.
+
+The independent judgment of *whether the evidence meets these criteria* is the
+job of `wicked-vault:verify-evidence` (the judgment tier), not `record`.
 
 ## Verifier syntax
 

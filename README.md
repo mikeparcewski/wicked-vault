@@ -1,22 +1,34 @@
 # wicked-vault
 
-Local-first **evidence primitive**. Records claim-backing artifacts, hashes them
-tamper-evidently, and *re-derives* their verdict on demand — it never trusts a
-stored status. Sibling to wicked-bus / wicked-brain / wicked-testing.
+Local-first **evidence primitive**. Records claim-backing artifacts with the
+**acceptance criteria they claim to clear**, hashes both tamper-evidently, and
+checks them on demand — it never trusts a stored verdict. Sibling to
+wicked-bus / wicked-brain / wicked-testing.
 
 It exists to answer one question honestly: **is this claim actually backed by
-evidence that still holds?** — so "tests pass", "build clean", "ready to merge"
-can't be asserted into truth.
+evidence that meets its bar?** — so "tests pass", "build clean", "ready to merge"
+can't be *asserted* into truth, and can't be *self-graded* into truth either.
+
+It checks on two tiers (ADR-0002):
+
+- **Integrity tier** — deterministic, re-derivable, model-free. Recompute the
+  hashes, re-run the pure verifier. CI-gate-safe. *Never trust a cached status.*
+- **Judgment tier** — an **independent** evaluator (≠ the agent that did the
+  work) judges the frozen evidence against the frozen criteria; the opinion is
+  recorded as a tamper-evident, append-only `opinion_attestation`. *Never trust
+  a self-graded "done".*
 
 ## Boundary
 
 | Owns (the primitive) | Refuses (lives in a consumer) |
 |---|---|
-| `record` · `verify` · `cross-check` · `supersede` | "is the work *done*?" (gate logic) |
-| the verifier family + tamper-evidence (envelope hash; git as audit chain) | scenario/flake history; claim authoring; work-shape |
+| `record` · `verify` · `inspect` · `attest` · `cross-check` · `supersede` | "is the work *done*?" (gate logic) |
+| criteria-binding + tamper-evidence (envelope hash; git as audit chain) | scenario/flake history; claim authoring; work-shape |
+| the deterministic verifier family **and** the append-only attestation ledger | running the judge — the model lives in the `verify-evidence` *skill*, never in the CLI |
 
-The consumer authors the contract; the vault evaluates it mechanically (G9).
-It cannot decide "done" — it has no gate logic to leak.
+The consumer authors the contract; the vault evaluates it mechanically (G9) and
+records independent judgments without re-deriving them (G10). It cannot decide
+"done" — it has no gate logic to leak.
 
 ## Install
 
@@ -41,16 +53,45 @@ provider (see below).
 
 ```bash
 wicked-vault init
+# record: --criteria is MANDATORY (the bar this evidence claims to clear); --verifier is optional
 wicked-vault record  --scope S --phase build --claim tests-pass --kind test-run \
-                     --source "npm test" --verifier "exit_code_eq:0" --run
-wicked-vault verify  <artifact-id>            # re-derives; exit 0 iff hash_ok && pass
-wicked-vault cross-check --scope S --phase build   # mechanical contract verdict; exit 0 iff PASS
-wicked-vault supersede <old-id> --scope S ... --run
+                     --source "npm test" --criteria "all unit tests pass (exit 0)" \
+                     --verifier "exit_code_eq:0" --run
+wicked-vault verify  <artifact-id>            # integrity tier; exit 0 iff hash_ok && pass; surfaces latest opinion
+wicked-vault inspect <artifact-id>            # frozen criteria + evidence + integrity (feeds the judge)
+wicked-vault attest  <artifact-id> --opinion pass --rationale "…" \
+                     --evaluator gemini-reviewer --model gemini/2.5-pro   # independent judgment; fail-closed
+wicked-vault attestations <artifact-id>       # append-only opinion log
+wicked-vault cross-check --scope S --phase build                    # --integrity-only (default, CI-safe)
+wicked-vault cross-check --scope S --phase build --with-attestations # opt-in judgment tier
+wicked-vault supersede <old-id> --scope S --criteria "…" ... --run
 wicked-vault declare-contract --scope S --phase build --spec contract.json
 wicked-vault list --scope S
 ```
 
-Output is JSON; exit code is the gate signal (0 = PASS).
+Output is JSON; exit code is the gate signal (0 = PASS). The model judge runs in
+the `wicked-vault:verify-evidence` skill (`inspect → eval → attest`) — the CLI
+itself never calls a model.
+
+## Independent evaluation (the judgment tier — G10)
+
+For criteria a deterministic verifier can't express ("the change adequately
+addresses the documented failure modes"), the `wicked-vault:verify-evidence`
+skill orchestrates an **independent** judge:
+
+1. `inspect` returns the frozen criteria + evidence.
+2. a model **distinct from the worker** judges criteria-vs-evidence (criteria
+   and evidence are passed as escaped *data*, never as instructions).
+3. `attest` records the `{opinion, rationale, evaluator, model, …}` to an
+   append-only, tamper-evident log.
+
+Guarantees that hold: criteria are frozen to the evidence (anti-downgrade);
+`attest` is **fail-closed** on a tampered artifact and **rejects a self-grade**
+(`evaluator == created_by`). What's traded: a judgment is **not reproducible** —
+it's re-evaluated, not re-derived. The default CI gate stays on the
+deterministic `--integrity-only` path; the judgment tier is opt-in. Threat model
+(prompt injection, lax-bar self-grade) and the council 5–0 review:
+[`docs/adr/0002`](docs/adr/0002-independent-evaluation-and-criteria-binding.md).
 
 ## wicked-bus integration (optional)
 
@@ -67,37 +108,50 @@ stdout, or an exit code.
 | `supersede` | `wicked.evidence.superseded` | `vault.supersede` | new_id, old_id, scope, phase, claim_id |
 | `verify` / `cross-check` (tamper only) | `wicked.evidence.tampered` | `vault.tamper` / `vault.cross_check` | id(s), payload_ok, envelope_ok |
 | `declare-contract` | `wicked.contract.declared` | `vault.contract` | scope, phase, contract_version |
-| `cross-check` | `wicked.contract.checked` | `vault.cross_check` | scope, phase, **overall**, contract_version |
+| `cross-check` | `wicked.contract.checked` | `vault.cross_check` | scope, phase, **overall**, mode, contract_version |
+| `attest` | `wicked.evidence.attested` | `vault.attest` | artifact_id, attestation_id, **opinion**, evaluator, model |
+| `cross-check --with-attestations` | `wicked.claim.evaluated` | `vault.cross_check` | scope, phase, claim_id, opinion, evaluator |
 
 All events use `domain: wicked-vault`. `wicked.contract.checked` carries the
 mechanical verdict (`PASS` / `REJECT` / `ERROR`) — the signal a gate consumer
-(wicked-testing, wicked-garden) subscribes to. `wicked.evidence.tampered` is the
-high-value alarm: a payload or envelope diverged from what was recorded (G2).
+(wicked-testing, wicked-garden) subscribes to. `wicked.evidence.attested` carries
+an independent `opinion` + its `evaluator`/`model` provenance (a judgment-tier
+signal, *not* a deterministic verdict). `wicked.evidence.tampered` is the
+high-value alarm: a payload, criteria, or envelope diverged from what was
+recorded (G2).
 
 ## Guarantees
 
-G1 server-minted ids · G2 envelope-hash tamper-evidence · **G3 re-derivation
-(never trust a cached status)** · G4 honest recording (not sandboxed — harness
-owns isolation) · G5 fail-closed · G6 append-only · G7 verifier purity ·
-G8 contract pinning · G9 mechanical evaluation. Full text + threat model:
-[`docs/CONTRACTS.md`](docs/CONTRACTS.md). Founding decisions + council review:
-[`docs/adr/0001`](docs/adr/0001-standalone-and-council-revisions.md).
+G1 server-minted ids · G2 envelope-hash tamper-evidence (**binds the criteria
+too**) · **G3 re-derivation (never trust a cached status)** · G4 honest
+recording (not sandboxed — harness owns isolation) · G5 fail-closed · G6
+append-only · G7 verifier purity (CLI never calls a model) · G8 contract pinning
+· G9 mechanical evaluation · **G10 attestation-chain trust** (independent
+judgments are recorded, not re-derived; distinct from deterministic results).
+Full text + threat model: [`docs/CONTRACTS.md`](docs/CONTRACTS.md). Founding
+decisions + council reviews:
+[`docs/adr/0001`](docs/adr/0001-standalone-and-council-revisions.md) ·
+[`docs/adr/0002`](docs/adr/0002-independent-evaluation-and-criteria-binding.md).
 
-## Verifiers (v1 core — deterministic)
+## Verifiers (deterministic sub-checks — optional)
 
 `exit_code_eq` · `regex_match` · `not_contains` · `jq_pred` · `commit_exists`.
-Nondeterministic observation verifiers (`pr_check_status`, `http_status_eq`) are
-a separate extension; `llm_eval` is intentionally not a verifier kind (it would
-falsify G7).
+Since ADR-0002 the verifier is an *optional* composable sub-check an independent
+evaluator may cite — not the whole story. Nondeterministic observation verifiers
+(`pr_check_status`, `http_status_eq`) are a separate extension. `llm_eval` is
+**not** a verifier kind (it would falsify G7) — independent judgment lives in the
+`verify-evidence` skill instead, recorded as an `opinion_attestation` under G10.
 
 ## Proof
 
 ```bash
 npm run prove                 # record -> tamper -> verify-rejects on a real repo
 bash test/verifiers.sh        # the 5 verifiers, pass + fail cases
-bash test/bus-integration.sh  # graceful no-op + event validity + emission
+bash test/attestation.sh      # criteria-binding, attest fail-closed/independence, require_attestation
+bash test/bus-integration.sh  # graceful no-op + event validity + emission (incl. attested)
 ```
 
-Status: v0.1.0 — core proven on real repos; wicked-bus event emission +
-provider registration implemented (optional, fire-and-forget). Not yet
+Status: v0.2.0 — deterministic core proven on real repos; criteria-binding +
+independent judgment tier (ADR-0002, council 5–0) implemented and proven;
+wicked-bus emission + provider registration (optional, fire-and-forget). Not yet
 implemented: `pr_check_status`/`http_status_eq` and the sqlite query cache.

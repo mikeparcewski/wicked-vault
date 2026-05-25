@@ -2,8 +2,17 @@
 import { readFileSync } from 'node:fs';
 import {
   findRoot, initVault, record, verify, crossCheck, declareContract, listEntries, supersede,
+  inspect, attest, listAttestations,
 } from '../src/vault.mjs';
 import { initBus } from '../src/bus.mjs';
+
+// --criteria accepts inline text or @file (acceptance criteria are often
+// multi-line). Resolved here so src/vault.mjs stays pure text-in.
+function resolveCriteria(val) {
+  if (typeof val !== 'string') return val;
+  if (val.startsWith('@')) return readFileSync(val.slice(1), 'utf8');
+  return val;
+}
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -45,18 +54,37 @@ try {
     case 'record': {
       const res = record(root, {
         scope: args.scope, phase: args.phase, claim: args.claim, kind: args.kind,
-        source: args.source, verifier: args.verifier,
+        source: args.source, verifier: args.verifier, criteria: resolveCriteria(args.criteria),
         run: !!args.run, artifact: typeof args.artifact === 'string' ? args.artifact : undefined,
         cwd,
       });
       publish('wicked.evidence.recorded', 'vault.record', {
         scope: args.scope, phase: args.phase, claim_id: args.claim, kind: args.kind,
         source: args.source, id: res.id, envelope_hash: res.envelope_hash,
-        status_at_record: res.status_at_record,
+        criteria_authored_by: res.criteria_authored_by, status_at_record: res.status_at_record,
       });
       emit(res, true);
       break;
     }
+    case 'inspect':
+      emit(inspect(root, args._[0] || args.id), true);
+      break;
+    case 'attest': {
+      const res = attest(root, args._[0] || args.id, {
+        opinion: args.opinion, rationale: args.rationale, evaluator: args.evaluator,
+        model: args.model, prompt_hash: args['prompt-hash'],
+        sampling: typeof args.sampling === 'string' ? JSON.parse(args.sampling) : undefined,
+      });
+      publish('wicked.evidence.attested', 'vault.attest', {
+        artifact_id: args._[0] || args.id, attestation_id: res.attestation_id,
+        opinion: res.opinion, evaluator: args.evaluator, model: args.model || null,
+      });
+      emit(res, true);
+      break;
+    }
+    case 'attestations':
+      emit(listAttestations(root, args._[0] || args.id), true);
+      break;
     case 'verify': {
       const res = verify(root, args._[0] || args.id);
       // Only the rare, high-value tamper case is published — a verify is a read
@@ -71,9 +99,12 @@ try {
       break;
     }
     case 'cross-check': {
-      const res = crossCheck(root, args.scope, args.phase);
+      // --integrity-only is the default (deterministic, CI-safe); attestation
+      // consultation is opt-in via --with-attestations (ADR-0002 D3/D10).
+      const withAttestations = args['with-attestations'] === true;
+      const res = crossCheck(root, args.scope, args.phase, { withAttestations });
       publish('wicked.contract.checked', 'vault.cross_check', {
-        scope: res.scope, phase: res.phase, overall: res.overall,
+        scope: res.scope, phase: res.phase, overall: res.overall, mode: res.mode,
         contract_version: res.contract_version, claims: (res.claims || []).length,
       });
       const tampered = (res.claims || []).filter((c) => c.hash_ok === false);
@@ -82,6 +113,17 @@ try {
           scope: res.scope, phase: res.phase,
           artifact_ids: tampered.map((c) => c.artifact_id),
         });
+      }
+      // Surface each consulted independent opinion (judgment tier).
+      if (withAttestations) {
+        for (const c of (res.claims || [])) {
+          if (c.attestation) {
+            publish('wicked.claim.evaluated', 'vault.cross_check', {
+              scope: res.scope, phase: res.phase, claim_id: c.claim_id,
+              opinion: c.attestation.opinion, evaluator: c.attestation.evaluator,
+            });
+          }
+        }
       }
       emit(res, res.overall === 'PASS');
       break;
@@ -100,7 +142,7 @@ try {
     case 'supersede': {
       const res = supersede(root, args._[0] || args.id, {
         scope: args.scope, phase: args.phase, claim: args.claim, kind: args.kind,
-        source: args.source, verifier: args.verifier,
+        source: args.source, verifier: args.verifier, criteria: resolveCriteria(args.criteria),
         run: !!args.run, artifact: typeof args.artifact === 'string' ? args.artifact : undefined,
         cwd,
       });
@@ -112,7 +154,7 @@ try {
       break;
     }
     default:
-      emit({ error: `unknown command: ${cmd}`, commands: ['init', 'record', 'verify', 'cross-check', 'declare-contract', 'list', 'supersede'] }, false);
+      emit({ error: `unknown command: ${cmd}`, commands: ['init', 'record', 'verify', 'inspect', 'attest', 'attestations', 'cross-check', 'declare-contract', 'list', 'supersede'] }, false);
   }
 } catch (e) {
   emit({ error: e.message }, false);
