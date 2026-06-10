@@ -3,3 +3,4 @@ node_modules/
 *.log
 # transient proof-run output (the scripts regenerate it; not source)
 test/evidence-*.txt
+.DS_Store
