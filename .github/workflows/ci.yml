@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      - name: CLI out-of-the-box baseline proof (gating)
+        run: bash test/cli-baseline.sh
       - name: Attestation + criteria-binding proof (gating)
         run: bash test/attestation.sh
       - name: wicked-bus integration proof (gating)

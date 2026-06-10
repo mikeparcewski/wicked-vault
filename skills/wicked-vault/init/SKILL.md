@@ -1,6 +1,6 @@
 ---
 name: wicked-vault:init
-description: Initialize a wicked-vault in a repository so claims can be backed by re-derivable evidence. Use when setting up the vault for the first time, when a vault command reports "no .wicked-vault/ found", or before the first record/cross-check in a project.
+description: Initialize a wicked-vault in a repository so claims can be backed by re-derivable evidence. OPTIONAL ceremony — record/declare-contract/supersede create the vault automatically; use init only to scaffold explicitly. A read command reporting code VAULT_NOT_FOUND means no evidence exists yet, which record (not init) fixes.
 ---
 
 # wicked-vault:init
@@ -11,9 +11,13 @@ vault records claim-backing artifacts, hashes them tamper-evidently, and
 
 ## When to use
 
-- First time using the vault in a repo.
-- A command failed with `no .wicked-vault/ found; run \`wicked-vault init\``.
-- Before the first `record` or `declare-contract` in a project.
+- You want the `.wicked-vault/` scaffold to exist before any evidence is
+  recorded (e.g. committing the directory layout, pre-provisioning CI).
+- Otherwise init is **optional**: `record`, `declare-contract`, and
+  `supersede` create the vault automatically on first use.
+- A read command failing with `code: VAULT_NOT_FOUND` means no evidence has
+  been recorded in that repo — recording evidence fixes it; bare init alone
+  does not produce evidence.
 
 ## Initialize
 

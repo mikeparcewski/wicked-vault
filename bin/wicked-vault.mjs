@@ -42,7 +42,8 @@ USAGE
   wicked-vault <command> [options]
 
 COMMANDS
-  init                         Create .wicked-vault/ in the current repo
+  init                         Create .wicked-vault/ in the current repo (optional —
+                               record / declare-contract / supersede auto-create it)
   record                       Capture evidence + the criteria it must clear
                                --scope S --phase P --claim C --kind K --source "<cmd|file>"
                                --criteria "<text|@file>" (--run | --artifact <file>) [--verifier "kind:arg"]
@@ -62,6 +63,7 @@ COMMANDS
 GLOBAL
   --cwd <dir>     Operate on a vault rooted at <dir> (default: walk up from cwd)
   --help, -h      Show this help
+  --version, -v   Print the wicked-vault version
 
 OUTPUT   JSON on stdout; exit code is the gate signal (0 = PASS / success).
 ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
@@ -80,6 +82,14 @@ if (cmd === undefined || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   process.exit(0);
 }
 
+// Version: like --help, must work outside any repo — resolved from this
+// package's own manifest, never from a vault.
+if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  process.stdout.write(pkg.version + '\n');
+  process.exit(0);
+}
+
 const args = parseArgs(rest);
 const cwd = (typeof args.cwd === 'string' && args.cwd) || process.cwd();
 
@@ -94,7 +104,22 @@ try {
   }
 
   const root = findRoot(cwd, { create: cmd === 'record' || cmd === 'declare-contract' || cmd === 'supersede' });
-  if (!root) emit({ error: 'no .wicked-vault/ found; run `wicked-vault init`' }, false);
+  if (!root) {
+    // "What evidence exists?" in a repo with no vault is a question with a
+    // truthful answer — none — not an infrastructure error.
+    if (cmd === 'list') emit([], true);
+    const notFound = {
+      error: `no .wicked-vault/ found in or above ${cwd}`,
+      code: 'VAULT_NOT_FOUND',
+      hint: 'no evidence has been recorded here — `wicked-vault record` creates the vault automatically; `wicked-vault init` is optional scaffolding',
+    };
+    // Gate consumers (wicked-loom) read `overall` from cross-check JSON:
+    // report a truthful FAIL (no evidence exists) instead of a generic error.
+    if (cmd === 'cross-check') {
+      emit({ scope: args.scope, phase: args.phase, overall: 'FAIL', ...notFound }, false);
+    }
+    emit(notFound, false);
+  }
 
   switch (cmd) {
     case 'record': {

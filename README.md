@@ -68,7 +68,7 @@ binaries support `--help`.
 ## CLI
 
 ```bash
-wicked-vault init
+wicked-vault init   # optional — record / declare-contract / supersede create .wicked-vault/ automatically
 # record: --criteria is MANDATORY (the bar this evidence claims to clear); --verifier is optional
 wicked-vault record  --scope S --phase build --claim tests-pass --kind test-run \
                      --source "npm test" --criteria "all unit tests pass (exit 0)" \
