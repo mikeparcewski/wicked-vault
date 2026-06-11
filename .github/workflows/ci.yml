@@ -1,3 +1,7 @@
+# wicked-vault — CI caller.
+# Tests are unix bash proofs (they shell out to node), so the shared matrix is
+# narrowed to ubuntu+macos via os_matrix. The Windows CLI smoke test stays a
+# sibling job here (the bash proofs don't run on Windows).
 name: CI
 
 on:
@@ -7,32 +11,12 @@ on:
     branches: [main]
 
 jobs:
-  # The vault's "tests" are self-contained bash proofs that build throwaway
-  # vaults in temp dirs. They need a unix shell + node + python3 + jq (all on
-  # the ubuntu/macos runner images). External sibling repos (memos, wicked-bus)
-  # are absent in CI — the relevant sections skip gracefully.
-  proofs:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-      - name: CLI out-of-the-box baseline proof (gating)
-        run: bash test/cli-baseline.sh
-      - name: Attestation + criteria-binding proof (gating)
-        run: bash test/attestation.sh
-      - name: wicked-bus integration proof (gating)
-        run: bash test/bus-integration.sh
-      - name: Verifier coverage (informational)
-        run: bash test/verifiers.sh
+  ci:
+    uses: mikeparcewski/wicked-ci/.github/workflows/node-ci.yml@0382b46d00d772c09911f9d00021e0172eb9abe4 # v1.1.0
+    with:
+      os_matrix: '["ubuntu-latest", "macos-latest"]'
+      test_cmd: 'bash test/cli-baseline.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh'
 
-  # The proof harness above is unix bash; this job proves the shipped Node CLI
-  # itself runs on Windows (it is pure ESM + node stdlib — no native deps).
   cli-smoke:
     runs-on: windows-latest
     steps:
