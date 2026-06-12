@@ -107,10 +107,11 @@ JS
 
 cd "$PROJ" || exit 2
 $VAULT init >/dev/null
-AID=$($VAULT record --scope ship --phase release --claim tests-pass --kind test-run \
+AID=$($VAULT record --scope ship --phase release --claim tests-pass --kind test-run --actor "worker-agent" \
   --source "true" --criteria "all unit tests pass (exit 0)" --verifier "exit_code_eq:0" --run \
   | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
-# independent attestation (evaluator distinct from $USER) -> wicked.evidence.attested
+# independent attestation (evaluator distinct from the explicit --actor worker)
+# -> wicked.evidence.attested
 $VAULT attest "$AID" --opinion pass --rationale "independently confirmed" \
   --evaluator "council-reviewer" --model "gemini/2.5-pro" >/dev/null
 cat > "$PROJ/contract.json" <<'JSON'

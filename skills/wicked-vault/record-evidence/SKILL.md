@@ -5,9 +5,12 @@ description: Record a claim-backing artifact in the vault and attach a determini
 
 # wicked-vault:record-evidence
 
-Capture an artifact, hash it tamper-evidently, and attach a verifier that can
-**re-derive** its verdict later. The vault does the capture itself — it never
-trusts a claimed status (G4).
+Capture an artifact, hash it (so naive/accidental mutation is detected on
+re-derivation), and attach a verifier that can **re-derive** its verdict later.
+The vault does the capture itself — it never trusts a claimed status (G4). The
+hash detects mutation; the committed git history is the durable tamper-evidence
+(see the README "Tamper detection" section — the envelope hash is unkeyed, so it
+is not a defense against a determined local writer).
 
 ## When to use
 

@@ -15,7 +15,7 @@ jobs:
     uses: mikeparcewski/wicked-ci/.github/workflows/node-ci.yml@0382b46d00d772c09911f9d00021e0172eb9abe4 # v1.1.0
     with:
       os_matrix: '["ubuntu-latest", "macos-latest"]'
-      test_cmd: 'bash test/cli-baseline.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh'
+      test_cmd: 'npm test'
 
   cli-smoke:
     runs-on: windows-latest

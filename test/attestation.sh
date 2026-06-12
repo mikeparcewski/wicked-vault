@@ -41,13 +41,19 @@ STATUS=$($VAULT verify "$ID" | field status)
   || bad "criteria tamper not detected (criteria_ok=$CRIT_OK status=$STATUS)"
 echo
 
-# fresh artifact for the remaining (untampered) checks
-ID=$($VAULT record --scope s --phase build --claim done --kind test-run \
+# fresh artifact for the remaining (untampered) checks — recorded with an
+# explicit worker --actor so the independence assertion is meaningful (not a
+# weak ambient $USER identity, which attest now fails closed on; see test 9).
+ID=$($VAULT record --scope s --phase build --claim done --kind test-run --actor "worker-agent" \
   --source "true" --criteria "all tests pass" --verifier "exit_code_eq:0" --run | field id)
 
 echo "=== 3. attest independence (evaluator must differ from creator) ==="
-$VAULT attest "$ID" --opinion pass --rationale x --evaluator "$USER" >/dev/null 2>&1 \
+$VAULT attest "$ID" --opinion pass --rationale x --evaluator "worker-agent" >/dev/null 2>&1 \
   && bad "self-grade should have been rejected" || ok "attest rejects evaluator==created_by"
+# trivial-equality bypass: case/whitespace variants must ALSO be rejected.
+$VAULT attest "$ID" --opinion pass --rationale x --evaluator " Worker-Agent " >/dev/null 2>&1 \
+  && bad "case/whitespace self-grade variant should have been rejected" \
+  || ok "attest rejects case/whitespace self-grade variant"
 echo
 
 echo "=== 4. attest records an independent opinion + provenance ==="
@@ -66,7 +72,9 @@ OP=$($VAULT verify "$ID" | python3 -c "import json,sys;print(json.load(sys.stdin
 echo
 
 echo "=== 6. attest is fail-closed against a tampered artifact ==="
-TID=$($VAULT record --scope s --phase build --claim t --kind test-run --source "true" --criteria "exits 0" --verifier "exit_code_eq:0" --run | field id)
+# Record with an explicit --actor so the tamper check (not the weak-identity
+# check) is the gate being proven here.
+TID=$($VAULT record --scope s --phase build --claim t --kind test-run --actor "worker-agent" --source "true" --criteria "exits 0" --verifier "exit_code_eq:0" --run | field id)
 PSHA=$(python3 -c "import json;print(json.load(open('.wicked-vault/entries/$TID.json'))['payload_sha256'])")
 python3 -c "import json;p='.wicked-vault/payloads/$PSHA';d=json.load(open(p));d['exit_code']=999;open(p,'w').write(json.dumps(d,sort_keys=True))"
 $VAULT attest "$TID" --opinion pass --rationale x --evaluator "someone-else" >/dev/null 2>&1 \
@@ -80,7 +88,7 @@ cat > c.json <<'JSON'
   "require_attestation": true, "required": true } ] }
 JSON
 $VAULT declare-contract --scope s --phase build --spec c.json >/dev/null
-AB=$($VAULT record --scope s --phase build --claim done --kind test-run \
+AB=$($VAULT record --scope s --phase build --claim done --kind test-run --actor "worker-agent" \
   --source "true" --criteria "all tests pass" --verifier "exit_code_eq:0" --run | field criteria_authored_by)
 [ "$AB" = "contract" ] && ok "contract-pinned criteria stamped criteria_authored_by=contract" \
   || bad "expected criteria_authored_by=contract, got $AB"
@@ -104,6 +112,59 @@ echo "=== 8. a criteria that contradicts the contract pin is a G8 downgrade ==="
 $VAULT record --scope s --phase build --claim done --kind test-run \
   --source "true" --criteria "literally anything" --verifier "exit_code_eq:0" --run >/dev/null 2>&1 \
   && bad "mismatched criteria should be rejected (G8)" || ok "record rejects criteria != contract pin (G8)"
+echo
+
+echo "=== 9. independence hardening — silent self-grade is harder (G10/D4) ==="
+cd "$(mktemp -d)"; $VAULT init >/dev/null
+
+# 9a. An artifact recorded under an AMBIENT identity (no --actor) carries a weak
+#     created_by_source. attest must FAIL CLOSED — 'evaluator != created_by' is
+#     not a trustworthy independence signal when the worker identity is ambient.
+WEAK_ID=$($VAULT record --scope ind --phase build --claim done --kind test-run \
+  --source "true" --criteria "exits 0" --verifier "exit_code_eq:0" --run | field id)
+WSRC=$(python3 -c "import json;print(json.load(open('.wicked-vault/entries/$WEAK_ID.json')).get('created_by_source',''))")
+[ "$WSRC" = "env-user" ] || [ "$WSRC" = "anonymous" ] \
+  && ok "ambient record stamped weak created_by_source=$WSRC" \
+  || bad "expected weak created_by_source, got '$WSRC'"
+$VAULT attest "$WEAK_ID" --opinion pass --rationale x --evaluator "gemini-reviewer" >/dev/null 2>&1 \
+  && bad "attest should fail closed on a weak/ambient worker identity" \
+  || ok "attest fails closed when the worker identity is ambient (no --actor)"
+
+# 9b. The escape hatch records the weakness for audit, doesn't hide it.
+WA=$($VAULT attest "$WEAK_ID" --opinion pass --rationale x --evaluator "gemini-reviewer" --allow-weak-worker-identity)
+WIW=$(printf '%s' "$WA" | field attestation_id)
+[ -n "$WIW" ] && ok "attest --allow-weak-worker-identity succeeds (audited)" || bad "escape hatch attest failed"
+FLAG=$($VAULT attestations "$WEAK_ID" | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['worker_identity_weak'])")
+[ "$FLAG" = "True" ] && ok "attestation stamps worker_identity_weak=true for audit" \
+  || bad "expected worker_identity_weak=true, got '$FLAG'"
+
+# 9c. An EXPLICIT --actor worker makes the independence assertion meaningful;
+#     an ambient/empty --evaluator for the JUDGE is refused (the silent self-grade).
+STRONG_ID=$($VAULT record --scope ind --phase build --claim done2 --kind test-run --actor "worker-agent" \
+  --source "true" --criteria "exits 0" --verifier "exit_code_eq:0" --run | field id)
+SSRC=$(python3 -c "import json;print(json.load(open('.wicked-vault/entries/$STRONG_ID.json')).get('created_by_source',''))")
+[ "$SSRC" = "explicit" ] && ok "explicit --actor stamped created_by_source=explicit" || bad "expected explicit, got '$SSRC'"
+$VAULT attest "$STRONG_ID" --opinion pass --rationale x --evaluator "" >/dev/null 2>&1 \
+  && bad "attest with empty --evaluator should be refused" || ok "attest refuses an empty/ambient evaluator identity"
+GOOD=$($VAULT attest "$STRONG_ID" --opinion pass --rationale "independently checked" --evaluator "codex-reviewer" | field attestation_id)
+[ -n "$GOOD" ] && ok "explicit worker + explicit distinct evaluator attests cleanly" || bad "expected a clean attest"
+echo
+
+echo "=== 10. payload_max_bytes is enforced on record (P2) ==="
+cd "$(mktemp -d)"; $VAULT init >/dev/null
+# Shrink the limit so a tiny over-size artifact is rejected without a huge file.
+python3 -c "import json;p='.wicked-vault/vault.json';d=json.load(open(p));d['payload_max_bytes']=16;json.dump(d,open(p,'w'),indent=2)"
+python3 -c "open('small.txt','w').write('x'*8)"
+python3 -c "open('big.txt','w').write('x'*64)"
+$VAULT record --scope pl --phase build --claim small --kind file --actor "worker-agent" \
+  --source small.txt --criteria "within the limit" --artifact small.txt >/dev/null 2>&1 \
+  && ok "under-limit payload (8B <= 16B) is recorded" || bad "under-limit payload should record"
+$VAULT record --scope pl --phase build --claim big --kind file --actor "worker-agent" \
+  --source big.txt --criteria "over the limit" --artifact big.txt >/dev/null 2>&1 \
+  && bad "over-limit payload (64B > 16B) should be REJECTED" || ok "over-limit payload is rejected (payload_max_bytes)"
+# Fail-closed: a rejected oversize record leaves NO entry behind.
+NBIG=$($VAULT list --scope pl --phase build | python3 -c "import json,sys;print(sum(1 for e in json.load(sys.stdin) if e['claim_id']=='big'))")
+[ "$NBIG" = "0" ] && ok "rejected oversize record wrote no entry (fail-closed)" || bad "oversize record leaked an entry"
 echo
 
 echo "=== SUMMARY ==="
