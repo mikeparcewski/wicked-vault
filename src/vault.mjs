@@ -74,6 +74,45 @@ function loadContract(root, scope, phase) {
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null;
 }
 
+// Resolve the acting identity for provenance + the G10/D4 independence check.
+// Precedence (strongest first):
+//   1. explicit value (CLI --actor / --evaluator)        -> source 'explicit'
+//   2. WICKED_VAULT_ACTOR env (harness-asserted identity) -> source 'env-actor'
+//   3. $USER env (the OS login — easily spoofed)          -> source 'env-user'
+//   4. nothing                                            -> source 'anonymous'
+// The *source* matters: 'explicit' and 'env-actor' are deliberate assertions;
+// 'env-user'/'anonymous' are weak and must not silently satisfy independence.
+function resolveActor(explicit) {
+  if (typeof explicit === 'string' && explicit.trim() !== '') {
+    return { id: explicit.trim(), source: 'explicit' };
+  }
+  const envActor = process.env.WICKED_VAULT_ACTOR;
+  if (typeof envActor === 'string' && envActor.trim() !== '') {
+    return { id: envActor.trim(), source: 'env-actor' };
+  }
+  const user = process.env.USER || process.env.USERNAME; // USERNAME = Windows
+  if (typeof user === 'string' && user.trim() !== '') {
+    return { id: user.trim(), source: 'env-user' };
+  }
+  return { id: 'unknown', source: 'anonymous' };
+}
+// Weak identity provenance — derived from ambient env, not deliberately asserted.
+const WEAK_IDENTITY_SOURCES = new Set(['env-user', 'anonymous']);
+
+// Read the vault config (vault.json). Falls back to defaults if the file is
+// absent or unreadable — record auto-creates the vault, so a config always
+// exists by the time a payload is captured, but be defensive.
+const DEFAULT_PAYLOAD_MAX_BYTES = 1048576;
+function loadConfig(root) {
+  const cfg = join(root, DIR, 'vault.json');
+  if (!existsSync(cfg)) return { payload_max_bytes: DEFAULT_PAYLOAD_MAX_BYTES };
+  try {
+    return JSON.parse(readFileSync(cfg, 'utf8'));
+  } catch {
+    return { payload_max_bytes: DEFAULT_PAYLOAD_MAX_BYTES };
+  }
+}
+
 export function record(root, opts) {
   const P = paths(root);
 
@@ -97,6 +136,18 @@ export function record(root, opts) {
     blob = readFileSync(opts.artifact);
   } else {
     throw new Error('record requires --run or --artifact');
+  }
+
+  // Enforce the configured payload ceiling (CONTRACTS.md §6). Oversize payloads
+  // are rejected here — before hashing or writing the blob — so a too-large
+  // capture can never bloat the committed audit chain. Fail-closed (G5): a
+  // rejected record produces NO entry and NO payload blob. `payload_max_bytes`
+  // <= 0 disables the guard (escape hatch for an explicitly unbounded vault).
+  const cfg = loadConfig(root);
+  const maxBytes = typeof cfg.payload_max_bytes === 'number'
+    ? cfg.payload_max_bytes : DEFAULT_PAYLOAD_MAX_BYTES;
+  if (maxBytes > 0 && blob.length > maxBytes) {
+    throw new Error(`payload exceeds payload_max_bytes: ${blob.length} > ${maxBytes} (set payload_max_bytes in .wicked-vault/vault.json to raise the limit, or 0 to disable)`);
   }
 
   const payload_sha256 = sha256(blob);
@@ -147,6 +198,11 @@ export function record(root, opts) {
     ? runVerifier(verifier, payloadView(blob), { repoRoot: opts.cwd || root })
     : { status: 'n/a', detail: 'no deterministic verifier (judgment-tier claim)' };
 
+  // Actor provenance for the G10/D4 independence assertion. An explicit
+  // --actor (or WICKED_VAULT_ACTOR) is a deliberate identity claim; a bare
+  // $USER is ambient and weak. attest() uses created_by_source to refuse a
+  // silent self-grade where both worker and judge are unasserted (see attest).
+  const actor = resolveActor(opts.actor);
   const entry = {
     id, ...fields,
     acceptance_criteria, criteria_authored_by,
@@ -157,7 +213,8 @@ export function record(root, opts) {
     supersedes: null,
     contract_version: contract ? contract.contract_version : null,
     created_at: new Date().toISOString(),
-    created_by: process.env.USER || 'unknown',
+    created_by: actor.id,
+    created_by_source: actor.source,
   };
   writeFileSync(join(P.entries, `${id}.json`), JSON.stringify(entry, null, 2));
   return { id, envelope_hash, criteria_authored_by, status_at_record: sr.status, status_detail: sr.detail };
@@ -267,6 +324,7 @@ export function inspect(root, id) {
     acceptance_criteria: entry.acceptance_criteria,
     criteria_authored_by: entry.criteria_authored_by,
     created_by: entry.created_by,
+    created_by_source: entry.created_by_source || null,
     evidence: { text: view.text, json: view.json },
     hash_ok: v.hash_ok,
     integrity_status: v.status,
@@ -287,11 +345,47 @@ export function attest(root, id, opts) {
   const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
 
   if (!OPINIONS.has(opts.opinion)) throw new Error(`attest: --opinion must be one of pass|reject|unclear (got '${opts.opinion}')`);
-  if (typeof opts.evaluator !== 'string' || !opts.evaluator) throw new Error('attest requires --evaluator');
+  if (typeof opts.evaluator !== 'string' || opts.evaluator.trim() === '') throw new Error('attest requires --evaluator');
 
-  // G10/D4 — mechanical independence: the judge must differ from the worker.
-  if (entry.created_by && opts.evaluator === entry.created_by) {
-    throw new Error(`attest refused (G10/D4): evaluator '${opts.evaluator}' equals the artifact creator — a judgment must be independent of the worker`);
+  // G10/D4 — mechanical independence, hardened. The judge must be a DELIBERATELY
+  // ASSERTED identity that differs from the worker. Three failure modes are
+  // closed here (all on top of the existing equality check):
+  //
+  //  (a) trivial-equality bypass — compare trimmed + case-folded so 'Alice',
+  //      'alice', and 'Alice ' can't sidestep the self-grade rejection.
+  //  (b) ambiguous worker identity — if the artifact was recorded under an
+  //      ambient identity ($USER / anonymous, created_by_source weak), the
+  //      independence claim cannot be trusted from a string compare alone.
+  //      We FAIL CLOSED unless the caller acknowledges it explicitly
+  //      (--allow-weak-worker-identity / opts.allowWeakWorkerIdentity), and we
+  //      stamp the weakness onto the attestation so audit can see it.
+  //  (c) ambiguous evaluator identity — the evaluator must be an explicit
+  //      assertion. A bare ambient identity for the JUDGE is refused: that is
+  //      exactly the silent self-grade the env var would otherwise enable.
+  //
+  // This is a stronger mechanical baseline + audit trail, NOT cryptographic
+  // independence. A determined human can still assert two distinct strings for
+  // the same person locally; real independence comes from a separate evaluator
+  // process/credential (see analyze-evidence skill) and the committed git trail.
+  const evaluator = resolveActor(opts.evaluator);
+  const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+
+  if (WEAK_IDENTITY_SOURCES.has(evaluator.source)) {
+    throw new Error(`attest refused (G10/D4): evaluator identity is ambient (${evaluator.source}='${evaluator.id}'), not a deliberate assertion. Pass an explicit --evaluator naming the independent judge (e.g. a model CLI or reviewer id) so a self-grade can't slip through silently.`);
+  }
+
+  if (entry.created_by && norm(evaluator.id) === norm(entry.created_by)) {
+    throw new Error(`attest refused (G10/D4): evaluator '${evaluator.id}' equals the artifact creator '${entry.created_by}' — a judgment must be independent of the worker`);
+  }
+
+  // The worker's identity provenance governs how much the independence claim is
+  // worth. A weak (ambient) worker identity means "different string" proves
+  // little. Fail closed unless the caller explicitly accepts that risk.
+  const workerSource = entry.created_by_source
+    || (entry.created_by && entry.created_by !== 'unknown' ? 'legacy' : 'anonymous');
+  const workerIdentityWeak = WEAK_IDENTITY_SOURCES.has(workerSource) || workerSource === 'legacy';
+  if (workerIdentityWeak && !opts.allowWeakWorkerIdentity) {
+    throw new Error(`attest refused (G10/D4): the artifact was recorded under a weak/ambient worker identity (created_by_source='${workerSource}'), so 'evaluator != created_by' is not a trustworthy independence signal. Re-record with an explicit --actor for the worker, or pass --allow-weak-worker-identity to attest anyway (the weakness is stamped on the attestation for audit).`);
   }
 
   // Fail-closed (G5/G10): never attest against a tampered artifact.
@@ -303,12 +397,17 @@ export function attest(root, id, opts) {
     artifact_id: id,
     opinion: opts.opinion,
     rationale: opts.rationale || '',
-    evaluator: opts.evaluator,
+    evaluator: evaluator.id,
+    evaluator_source: evaluator.source, // provenance of the judge identity (G10/D4)
     model: opts.model || null,
     prompt_hash: opts.prompt_hash || null,
     sampling: opts.sampling || null,
     evidence_sha256: entry.payload_sha256,
     criteria_sha256: entry.criteria_sha256,
+    // Audit flag: the worker identity this independence claim rests on was weak
+    // (ambient $USER / anonymous / legacy). The attestation was allowed via an
+    // explicit acknowledgement; a downstream gate may choose to discount it.
+    worker_identity_weak: workerIdentityWeak,
     created_at: new Date().toISOString(),
   };
   // tamper-evident binding over the attestation tuple (G2-style, G10)

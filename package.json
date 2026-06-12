@@ -1,6 +1,6 @@
 {
   "name": "wicked-vault",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Local-first evidence primitive — record evidence with its acceptance criteria, re-derive integrity deterministically, and record independent third-party judgments. Never trusts a stored verdict, never lets work self-grade its own \"done\".",
   "type": "module",
   "bin": {
@@ -43,6 +43,7 @@
     "install.mjs"
   ],
   "scripts": {
+    "test": "bash test/cli-baseline.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh",
     "prove": "bash test/prove-on-memos.sh",
     "prove:verifiers": "bash test/verifiers.sh",
     "prove:attestation": "bash test/attestation.sh",

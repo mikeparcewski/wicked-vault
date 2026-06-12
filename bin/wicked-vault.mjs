@@ -47,12 +47,17 @@ COMMANDS
   record                       Capture evidence + the criteria it must clear
                                --scope S --phase P --claim C --kind K --source "<cmd|file>"
                                --criteria "<text|@file>" (--run | --artifact <file>) [--verifier "kind:arg"]
+                               [--actor ID]  (the asserted worker identity; strengthens the
+                               independence check — falls back to WICKED_VAULT_ACTOR then $USER)
   verify   <artifact-id>       Integrity tier: re-derive hashes + verifier (deterministic,
                                model-free). Exit 0 iff intact AND pass. Surfaces latest opinion.
   inspect  <artifact-id>       Frozen criteria + evidence + integrity (what a judge evaluates)
   attest   <artifact-id>       Record an INDEPENDENT judgment (fail-closed; evaluator != creator)
                                --opinion <pass|reject|unclear> --rationale "..." --evaluator ID
                                [--model prov/ver] [--prompt-hash H] [--sampling '<json>']
+                               [--allow-weak-worker-identity]  (attest anyway when the artifact
+                               was recorded under an ambient $USER/anonymous identity; the
+                               weakness is stamped on the attestation for audit)
   attestations <artifact-id>   Show the append-only opinion log
   cross-check                  Mechanical contract verdict; exit 0 iff PASS
                                --scope S --phase P [--integrity-only (default) | --with-attestations]
@@ -67,6 +72,8 @@ GLOBAL
 
 OUTPUT   JSON on stdout; exit code is the gate signal (0 = PASS / success).
 ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
+         WICKED_VAULT_ACTOR=ID   Assert the worker identity for record/supersede
+                                 (used by the G10/D4 independence check)
 
 Skills (AI CLIs):  wicked-vault:{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}
 Install skills:    npx wicked-vault-install        (run with --help for options)
@@ -127,6 +134,7 @@ try {
         scope: args.scope, phase: args.phase, claim: args.claim, kind: args.kind,
         source: args.source, verifier: args.verifier, criteria: resolveCriteria(args.criteria),
         run: !!args.run, artifact: typeof args.artifact === 'string' ? args.artifact : undefined,
+        actor: typeof args.actor === 'string' ? args.actor : undefined,
         cwd,
       });
       publish('wicked.evidence.recorded', 'vault.record', {
@@ -145,6 +153,7 @@ try {
         opinion: args.opinion, rationale: args.rationale, evaluator: args.evaluator,
         model: args.model, prompt_hash: args['prompt-hash'],
         sampling: typeof args.sampling === 'string' ? JSON.parse(args.sampling) : undefined,
+        allowWeakWorkerIdentity: args['allow-weak-worker-identity'] === true,
       });
       publish('wicked.evidence.attested', 'vault.attest', {
         artifact_id: args._[0] || args.id, attestation_id: res.attestation_id,
@@ -215,6 +224,7 @@ try {
         scope: args.scope, phase: args.phase, claim: args.claim, kind: args.kind,
         source: args.source, verifier: args.verifier, criteria: resolveCriteria(args.criteria),
         run: !!args.run, artifact: typeof args.artifact === 'string' ? args.artifact : undefined,
+        actor: typeof args.actor === 'string' ? args.actor : undefined,
         cwd,
       });
       publish('wicked.evidence.superseded', 'vault.supersede', {

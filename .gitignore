@@ -1,6 +1,11 @@
 node_modules/
-.wicked-vault/
 *.log
+# The vault (.wicked-vault/) is COMMITTED by default — the committed,
+# branch-protected git history IS the real tamper-evidence backstop (the
+# envelope hash only catches naive/accidental mutation; see README "Tamper
+# detection" + CONTRACTS.md §6). Do NOT add `.wicked-vault/` here. Only the
+# DERIVED sqlite query cache is ignored (it is rebuilt from entries/payloads):
+.wicked-vault/index.sqlite
 # transient proof-run output (the scripts regenerate it; not source)
 test/evidence-*.txt
 .DS_Store

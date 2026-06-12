@@ -97,6 +97,7 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
 | `supersedes` | string? | prior artifact id |
 | `contract_version` | string? | the contract hash in force at record |
 | `created_at` / `created_by` | ts / string | actor provenance |
+| `created_by_source` | enum | how `created_by` was resolved: `explicit` (`--actor`) · `env-actor` (`WICKED_VAULT_ACTOR`) · `env-user` (ambient `$USER`, weak) · `anonymous` (none, weak). Governs the G10/D4 independence check — a weak source makes `evaluator != created_by` untrustworthy, so `attest` fails closed unless explicitly overridden. |
 
 ### 3.2 Contract (exit-criteria — what evidence a scope+phase requires)
 
@@ -136,7 +137,9 @@ Its trust is G10 (attestation-chain), not G3 (re-derivation).
 | `artifact_id` | string | the evidence it judges |
 | `opinion` | enum | `pass` · `reject` · `unclear` — deliberately NOT named `verdict`/`status` |
 | `rationale` | string | the judge's reasoning (structured output, not free-form prose injection) |
-| `evaluator` | string | the judging identity — **MUST differ from the artifact's `created_by`** (G10/D4) |
+| `evaluator` | string | the judging identity — **MUST differ from the artifact's `created_by`** (G10/D4), compared trimmed + case-folded; **MUST be an explicit assertion** (an ambient `$USER` evaluator is refused) |
+| `evaluator_source` | enum | provenance of the evaluator identity (`explicit` · `env-actor`); ambient sources are refused at `attest` |
+| `worker_identity_weak` | bool | true if the judged artifact was recorded under a weak/ambient/legacy `created_by_source`; `attest` fails closed in that case unless `--allow-weak-worker-identity` is passed, which stamps this flag for audit |
 | `model` | string | provider/version, e.g. `gemini/2.5-pro` |
 | `prompt_hash` | string? | hash of the prompt template used |
 | `sampling` | object? | `{temperature, …}` — provenance for disagreement analysis |
@@ -203,8 +206,16 @@ reproducible.**
   (a) acceptance criteria are mandatory and bound into the envelope, frozen to
   the evidence (anti-downgrade); (b) the model runs only in the orchestration
   layer (`analyze-evidence` skill) — the CLI never calls a model, so G7 holds;
-  (c) `attest` is fail-closed if the frozen inputs no longer hash-match, and
-  rejects when `evaluator == created_by`; (d) judgments are non-reproducible by
+  (c) `attest` is fail-closed if the frozen inputs no longer hash-match, and the
+  independence check is hardened: it rejects when `evaluator == created_by`
+  (trimmed + case-folded), **requires an explicit (non-ambient) evaluator
+  identity**, and **fails closed when the worker identity is ambient/weak**
+  (`created_by_source` of `env-user`/`anonymous`/legacy) unless explicitly
+  overridden with `--allow-weak-worker-identity` (which records the weakness for
+  audit). This is a mechanical baseline + audit trail, **not** cryptographic
+  independence — a determined local actor can still assert two strings; real
+  independence is a separate evaluator process/credential + the committed git
+  trail; (d) judgments are non-reproducible by
   design — "never trust the cached verdict" here means *re-evaluate
   independently*, complementary to G3's *re-derive deterministically*. Threat
   model in §5a.
@@ -298,8 +309,12 @@ In-repo, committed (Decision D1) — **one file per artifact** (council Q2):
   audit-trail-grade tamper-evidence, not cryptographic immutability. G2's
   envelope hash detects payload/verdict mutation; it does not prevent a force-push
   that rewrites both. CI branch protection is the backstop.
-- **Large payloads:** `payload_max_bytes` guard; over-size payloads externalize
-  (hash recorded in the entry, blob stored out-of-tree) to keep the repo lean.
+- **Large payloads:** `payload_max_bytes` (default 1 MiB) is **enforced at
+  `record` time** — an over-size payload is rejected fail-closed (G5): no entry
+  and no blob are written, keeping the committed repo lean. Set it to `0` to
+  disable the guard. (Externalizing over-size blobs out-of-tree with the hash
+  recorded in the entry is future hardening, not yet implemented — today the
+  contract is "reject", not "externalize".)
 
 ---
 

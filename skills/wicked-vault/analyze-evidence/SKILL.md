@@ -1,6 +1,6 @@
 ---
 name: wicked-vault:analyze-evidence
-description: Have an INDEPENDENT party analyze whether recorded evidence actually meets its frozen acceptance criteria, and record the judgment as a tamper-evident attestation. Use when judging free-form criteria a deterministic check can't express ("does this adequately address the failure modes"), or producing a third-party sign-off that defeats self-graded "done". Runs a model (non-reproducible, costs a call). For the cheap deterministic integrity check, use wicked-vault:verify-evidence instead.
+description: Have an INDEPENDENT party analyze whether recorded evidence actually meets its frozen acceptance criteria, and record the judgment as a hash-bound, append-only attestation (mutation-detecting; durable tamper-evidence is the committed git history). Use when judging free-form criteria a deterministic check can't express ("does this adequately address the failure modes"), or producing a third-party sign-off that defeats self-graded "done". Runs a model (non-reproducible, costs a call). For the cheap deterministic integrity check, use wicked-vault:verify-evidence instead.
 ---
 
 # wicked-vault:analyze-evidence
@@ -8,7 +8,9 @@ description: Have an INDEPENDENT party analyze whether recorded evidence actuall
 This is the vault's **independent referee** — the judgment tier (G10). The agent
 that produced the work cannot grade its own "done"; this flow has a *different*
 evaluator analyze the frozen evidence against its frozen acceptance criteria,
-then records that analysis as a tamper-evident, append-only `opinion_attestation`.
+then records that analysis as a hash-bound, append-only `opinion_attestation`
+(mutation-detecting; the durable tamper-evidence is the committed git history —
+see the README "Tamper detection" section).
 
 **Know what you're invoking.** This skill:
 - **runs a model** (an independent evaluator), so it costs a call and is
@@ -26,9 +28,23 @@ satisfy the acceptance criteria?"* and the criteria need judgment.
 
 The evaluator **MUST be distinct from the agent that produced the evidence.**
 Use a separate model CLI (e.g. `gemini`, `codex`) or an isolated subagent — not
-the same context that did the work. The CLI enforces the floor: `attest`
-**rejects** when `--evaluator` equals the artifact's `created_by`. Spoofable, so
-treat the rule as real, not as a checkbox.
+the same context that did the work. The CLI enforces a hardened floor:
+
+- `attest` **rejects** when `--evaluator` equals the artifact's `created_by`
+  (compared trimmed + case-folded, so `Alice`/`alice ` can't sidestep it).
+- For the independence claim to be meaningful, the **worker** should record with
+  an explicit `--actor "<id>"` (or set `WICKED_VAULT_ACTOR`). If the artifact was
+  recorded under only an *ambient* identity (bare `$USER` / anonymous), `attest`
+  **fails closed** — pass `--allow-weak-worker-identity` to proceed anyway, which
+  stamps `worker_identity_weak: true` on the attestation for audit.
+- The **evaluator** identity must itself be an explicit assertion; a bare ambient
+  evaluator id is refused (that is the silent self-grade).
+
+This is a stronger mechanical baseline + audit trail, **not** cryptographic
+independence — a determined human can still assert two distinct strings for the
+same person locally. Real independence comes from a genuinely separate evaluator
+process/credential and the committed, branch-protected git trail. Treat the rule
+as real, not as a checkbox.
 
 ## Orchestration
 
