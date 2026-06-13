@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
+import { join, dirname, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256, envelopeHash, canonical } from './hash.mjs';
 import { newId } from './id.mjs';
@@ -7,6 +7,75 @@ import { runVerifier } from './verifiers.mjs';
 
 const DIR = '.wicked-vault';
 const SCHEMA = 1;
+
+// ── Cross-platform atomic write ───────────────────────────────────────────────
+// Every durable write in the vault (config, payload blob, entry, attestation,
+// contract, supersede state-flip) goes through this helper. We write to a unique
+// temp file in the SAME directory (so the rename stays on one filesystem, which
+// is what makes it atomic) and then rename it over the destination.
+//
+// On POSIX, rename() atomically replaces an existing destination. On win32 the
+// same rename throws EPERM/EEXIST/EACCES when the destination already exists, and
+// EBUSY when a scanner/indexer briefly holds the file. We fall back to
+// unlink-then-rename on those codes, with a short bounded retry for the
+// transient EBUSY case. The unlink-then-rename window is non-atomic, but it only
+// runs on win32 (POSIX always takes the atomic path) and only on a genuine
+// overwrite — the durability win (no half-written file ever lands at the real
+// path on a crash) holds on every platform. On any failure the temp file is
+// cleaned up so a crashed write never leaves orphaned temp litter behind.
+const WIN_OVERWRITE_CODES = new Set(['EPERM', 'EEXIST', 'EACCES', 'EBUSY']);
+
+function atomicWriteFileSync(destPath, data) {
+  const dir = dirname(destPath);
+  // Unique per-write temp name in the destination directory. newId() is
+  // monotonic+random so concurrent writers can't collide on the temp path.
+  const tmpPath = join(dir, `.${basename(destPath)}.${newId()}.tmp`);
+  try {
+    writeFileSync(tmpPath, data);
+  } catch (e) {
+    // Couldn't even stage the temp file — try to clean up, then surface.
+    tryUnlink(tmpPath);
+    throw e;
+  }
+  try {
+    renameSync(tmpPath, destPath);
+    return;
+  } catch (e) {
+    if (process.platform === 'win32' && WIN_OVERWRITE_CODES.has(e.code)) {
+      // Windows rejects rename onto an existing file. Remove the destination
+      // first, then rename. Retry the whole sequence a few times for the
+      // transient EBUSY case (AV / indexer holding a handle for a few ms).
+      const attempts = 5;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          if (existsSync(destPath)) tryUnlink(destPath);
+          renameSync(tmpPath, destPath);
+          return;
+        } catch (inner) {
+          const transient = inner.code === 'EBUSY' || inner.code === 'EPERM' || inner.code === 'EACCES';
+          if (transient && i < attempts - 1) { sleepMs(20 * (i + 1)); continue; }
+          tryUnlink(tmpPath);
+          throw inner;
+        }
+      }
+    }
+    // POSIX (or a non-overwrite win32 error): don't leave the temp behind.
+    tryUnlink(tmpPath);
+    throw e;
+  }
+}
+
+function tryUnlink(p) {
+  try { unlinkSync(p); } catch { /* best-effort cleanup */ }
+}
+
+// Bounded synchronous backoff for the transient win32 EBUSY retry. Uses a busy
+// spin (no async) so the write path stays synchronous; the total budget is tiny
+// (<= ~300ms across all retries) and only ever runs on win32.
+function sleepMs(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* spin */ }
+}
 
 export function findRoot(start, { create = false } = {}) {
   let cur = start;
@@ -28,7 +97,7 @@ export function initVault(root) {
   mkdirSync(join(base, 'attestations'), { recursive: true });
   const cfg = join(base, 'vault.json');
   if (!existsSync(cfg)) {
-    writeFileSync(cfg, JSON.stringify(
+    atomicWriteFileSync(cfg, JSON.stringify(
       { schema_version: SCHEMA, store_mode: 'in-repo', payload_max_bytes: 1048576 }, null, 2));
   }
   return base;
@@ -186,7 +255,7 @@ export function record(root, opts) {
 
   // content-addressed payload (dedupe)
   const payloadPath = join(P.payloads, payload_sha256);
-  if (!existsSync(payloadPath)) writeFileSync(payloadPath, blob);
+  if (!existsSync(payloadPath)) atomicWriteFileSync(payloadPath, blob);
 
   const id = newId();
   const fields = {
@@ -216,7 +285,7 @@ export function record(root, opts) {
     created_by: actor.id,
     created_by_source: actor.source,
   };
-  writeFileSync(join(P.entries, `${id}.json`), JSON.stringify(entry, null, 2));
+  atomicWriteFileSync(join(P.entries, `${id}.json`), JSON.stringify(entry, null, 2));
   return { id, envelope_hash, criteria_authored_by, status_at_record: sr.status, status_detail: sr.detail };
 }
 
@@ -236,7 +305,7 @@ export function supersede(root, oldId, recordOpts) {
   const newPath = join(P.entries, `${res.id}.json`);
   const newEntry = JSON.parse(readFileSync(newPath, 'utf8'));
   newEntry.supersedes = oldId;
-  writeFileSync(newPath, JSON.stringify(newEntry, null, 2));
+  atomicWriteFileSync(newPath, JSON.stringify(newEntry, null, 2));
 
   // 2. confirm the new entry is durably on disk BEFORE flipping the old one.
   if (!existsSync(newPath)) throw new Error('supersede: replacement entry failed to persist');
@@ -245,7 +314,7 @@ export function supersede(root, oldId, recordOpts) {
   //    identifying fields + payload; only `state` transitions, per G6).
   const oldEntry = JSON.parse(readFileSync(oldPath, 'utf8'));
   oldEntry.state = 'superseded';
-  writeFileSync(oldPath, JSON.stringify(oldEntry, null, 2));
+  atomicWriteFileSync(oldPath, JSON.stringify(oldEntry, null, 2));
 
   return { new_id: res.id, old_id: oldId };
 }
@@ -416,7 +485,7 @@ export function attest(root, id, opts) {
 
   const dir = attestationDir(root, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${att.attestation_id}.json`), JSON.stringify(stored, null, 2));
+  atomicWriteFileSync(join(dir, `${att.attestation_id}.json`), JSON.stringify(stored, null, 2));
   return { attestation_id: att.attestation_id, attestation_hash, opinion: att.opinion };
 }
 
@@ -443,7 +512,7 @@ export function declareContract(root, scope, phase, spec) {
   };
   const dir = join(P.contracts, scope);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${phase}.json`), JSON.stringify(obj, null, 2));
+  atomicWriteFileSync(join(dir, `${phase}.json`), JSON.stringify(obj, null, 2));
   return { contract_version };
 }
 
