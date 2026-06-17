@@ -102,9 +102,14 @@ The footgun: if a `.wicked-vault/` exists in a **shared parent** (a monorepo
 root, `$HOME`, or a temp dir left over from a previous run), a command run in a
 child directory that has *no vault of its own* will resolve **upward** and write
 into that parent vault — so evidence from unrelated scopes can accumulate in one
-root. Evidence integrity is never weakened (every artifact is still hash-bound
-and re-derived independently), but a `cross-check` / `list` you expected to be
-isolated may see artifacts from sibling work sharing the same ancestor root.
+root. This is most disruptive when the stray ancestor is high up the tree (a
+monorepo root, or a `.wicked-vault/` left near `$HOME`): commands run anywhere
+beneath it silently share that one vault. Evidence integrity is never weakened
+(every artifact is still hash-bound and re-derived independently), but a
+`cross-check` / `list` you expected to be isolated may see artifacts from
+sibling work sharing the same ancestor root. To avoid the surprise, run from —
+or keep a committed `.wicked-vault/` at — your intended root, or pass an explicit
+start dir; see *How to stay isolated* below.
 
 How to stay isolated:
 
