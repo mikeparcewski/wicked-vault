@@ -57,6 +57,35 @@ npx wicked-vault declare-contract --scope checkout --phase release --spec contra
   modes").
 - The `contract_version` is a hash of the required-evidence set (G8 pinning).
 
+### Authoring strong contract criteria (the trusted path's whole point)
+
+The contract is where criteria are authored *separately from the worker*, so it
+is the place to set a bar a self-grading worker cannot lower. A pinned criterion
+should be **measurable**, not a vibe. For a **high-blast-radius** claim (schema /
+data change, integration cutover, production transition), pin criteria that
+assert all three of:
+
+1. **Verification** — the concrete, automatable check and who signs it: row
+   counts / checksums / reconciliation, golden-master diff = 0, contract tests
+   green, perf against the known hotspots. Not "migrated" but "row counts match
+   source ± 0 and the recon report is signed".
+2. **Tested rollback** — a *rehearsed* (not merely written) rollback with its
+   **trigger** (who decides, on what signal, by when) and the **point of no
+   return stated explicitly**. "Rollback **tested**, not just written."
+3. **Enumerated blast radius** — every reader and writer of the surface listed
+   **explicitly, not assumed**, and how each is protected during the change.
+
+This is the same triad documented in `wicked-vault:record-evidence` (with a
+worked example), lifted in shape from a migration factory's gated-change specs
+(`db-endpoint-update` / `cutover`). It directly counters the **T1 — lax-bar
+self-grade** risk in `wicked-vault:analyze-evidence` by raising the floor on what
+the bar must say. It is **authoring guidance only**: the vault still adds no
+gate, policy, or risk-class behaviour — `cross-check` remains a pure mechanical
+function of `(consumer-authored contract, recorded artifacts)` (G9). A
+`require_attestation: true` claim plus a criterion that *names its rollback and
+blast radius* is what makes the independent judge's "does this adequately address
+the failure modes?" answerable rather than a rubber stamp.
+
 ## Step 2 — Record the evidence
 
 Record one artifact per required claim (`wicked-vault:record-evidence`). Each `claim_id`
