@@ -90,6 +90,39 @@ Output is JSON; exit code is the gate signal (0 = PASS). The model judge runs in
 the `wicked-vault:analyze-evidence` skill (`inspect → eval → attest`) — the CLI
 itself never calls a model.
 
+### Root resolution (and the shared-parent footgun)
+
+The vault root is found by **walking up from the current directory to the
+nearest ancestor `.wicked-vault/`** — the same way `git` finds `.git/`. This is
+deliberate: any subdirectory of a repo can run vault commands and they all share
+the one repo-root vault. `record` / `declare-contract` / `supersede` create a
+vault at the *start* directory **only when no ancestor vault is found**.
+
+The footgun: if a `.wicked-vault/` exists in a **shared parent** (a monorepo
+root, `$HOME`, or a temp dir left over from a previous run), a command run in a
+child directory that has *no vault of its own* will resolve **upward** and write
+into that parent vault — so evidence from unrelated scopes can accumulate in one
+root. This is most disruptive when the stray ancestor is high up the tree (a
+monorepo root, or a `.wicked-vault/` left near `$HOME`): commands run anywhere
+beneath it silently share that one vault. Evidence integrity is never weakened
+(every artifact is still hash-bound and re-derived independently), but a
+`cross-check` / `list` you expected to be isolated may see artifacts from
+sibling work sharing the same ancestor root. To avoid the surprise, run from —
+or keep a committed `.wicked-vault/` at — your intended root, or pass an explicit
+start dir; see *How to stay isolated* below.
+
+How to stay isolated:
+
+- **Give each project its own committed `.wicked-vault/`** (run `init`, or just
+  `record` once, at the project root) so the walk-up stops there. A nested vault
+  always wins over an ancestor.
+- Don't run the vault from inside a directory tree whose parent has a stray
+  vault — and in tests, always operate in a fresh, fully isolated temp root.
+- `--cwd <dir>` sets where the walk-up **starts**, not a pinned root: if an
+  ancestor `.wicked-vault/` exists above `<dir>`, `--cwd` still resolves up to
+  it. It forces isolation only when there is no ancestor vault. (Place `--cwd`
+  *after* the subcommand: `wicked-vault record --cwd <dir> …`.)
+
 ## Two skills, two tiers (so the caller knows what they're invoking)
 
 - **`wicked-vault:verify-evidence`** — integrity tier. Deterministic, model-free,

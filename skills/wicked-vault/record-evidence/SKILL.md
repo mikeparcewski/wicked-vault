@@ -76,6 +76,57 @@ and is rejected.
 The independent judgment of *whether the evidence meets these criteria* is the
 job of `wicked-vault:analyze-evidence` (the judgment tier), not `record`.
 
+## What good criteria look like (especially for a high-blast-radius claim)
+
+The vault *freezes and binds* whatever criteria you supply, but it cannot make
+weak criteria strong — a worker who writes a lax bar gets a guaranteed pass
+(the judgment-tier **T1 — lax-bar self-grade** risk in
+`wicked-vault:analyze-evidence`). The single best defence is a **contract-pinned**
+criterion (`criteria_authored_by: contract`, authored separately from the
+worker). Beyond that, raise the floor on *what the criterion asserts*.
+
+A criterion is weak when it is a vibe ("works", "looks good", "tests pass"). It
+is strong when it is **measurable, owned, and — for a dangerous change — names
+how the change is undone**. For a low-risk claim, a single measurable line is
+enough (`all unit tests pass (exit 0)`, `line coverage >= 80%`). For a
+**high-blast-radius** claim (a schema/data change, an integration cutover, a
+production transition), the criteria SHOULD assert all three of:
+
+1. **Verification** — concrete, automatable evidence the change is correct:
+   row counts / checksums / reconciliation queries, a golden-master diff = 0,
+   contract tests green, a performance check against the known hotspots. Name
+   *which* check and *who signs* the reconciliation. Not "data migrated" but
+   "row counts match source ± 0 and the reconciliation report is signed".
+2. **Tested rollback** — a rollback procedure that has been *rehearsed*, not
+   merely written, with its **trigger** (who decides to roll back, on what
+   signal, by when) and the **point of no return stated explicitly** (after
+   which step rollback is no longer possible). "Rollback **tested**, not just
+   written" — a dry-run record is itself recordable evidence.
+3. **Enumerated blast radius** — *every* reader and writer of the affected
+   surface listed **explicitly, not assumed**, and how each is protected during
+   the change. An un-enumerated consumer is an unmitigated failure mode.
+
+This shape is lifted from a migration factory's gated-change specs (the
+verification / rollback / blast-radius triad of its `db-endpoint-update` and
+`cutover` templates, and the "rollback tested, not written" cutover gate). It is
+**authoring guidance only** — the vault adds no gate, policy, or risk-class
+behaviour from it; it stays a deliberately narrow evidence primitive. Use it to
+write a stronger `--criteria` (or, better, a stronger contract pin in
+`wicked-vault:cross-check-evidence`).
+
+> Worked example — a strong criterion for a risky DB claim (`@file` keeps it
+> readable and reviewable in the diff):
+>
+> ```
+> Verification: post-migration row count of orders matches pre-migration
+>   source ± 0; checksum of (id,total) reconciles; recon report signed by DBA.
+> Rollback (TESTED): dry-run rehearsed 2026-06-10; trigger = error rate > 1%
+>   in first 30 min, ops on-call decides; restore from pre-cutover snapshot;
+>   POINT OF NO RETURN = after the dual-write window closes (step 7).
+> Blast radius: readers = [reporting-etl, mobile-api, billing-cron];
+>   writers = [checkout-svc]; each pinned to the compat view for the window.
+> ```
+
 ## Verifier syntax
 
 `--verifier "kind:arg"` (or a JSON object for advanced params). The v1 core
