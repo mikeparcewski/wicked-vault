@@ -66,7 +66,8 @@ COMMANDS
   list                         --scope S [--phase P]
 
 GLOBAL
-  --cwd <dir>     Operate on a vault rooted at <dir> (default: walk up from cwd)
+  --cwd <dir>     Start the upward search for .wicked-vault/ at <dir> (default: cwd);
+                  resolves to an ancestor vault if one exists above it — not a pinned root
   --help, -h      Show this help
   --version, -v   Print the wicked-vault version
 

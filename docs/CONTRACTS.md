@@ -361,7 +361,9 @@ wicked-vault declare-contract --scope S --phase P --spec <f> -> {contract_versio
 wicked-vault list     --scope S [--phase P]                  -> [Artifact…]
 ```
 
-Vault root auto-detected by walking up to `.wicked-vault/`; `--cwd` overrides.
+Vault root auto-detected by walking up to `.wicked-vault/`; `--cwd` sets the
+starting directory for that upward search (default: cwd) — it does not pin or
+override the root, so an ancestor `.wicked-vault/` above `<dir>` still wins.
 Every command emits JSON and exits non-zero on `FAIL`/`ERROR` (G5). The model
 judge runs in the `wicked-vault:analyze-evidence` skill, which orchestrates
 `inspect → independent eval → attest`; the CLI itself never calls a model.
