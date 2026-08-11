@@ -1,20 +1,24 @@
-// Optional, fire-and-forget wicked-bus integration.
-//
-// The vault is a zero-dependency, local-first primitive. wicked-bus is a
-// *sibling* primitive, never a hard dependency: this module dynamic-imports it
-// at runtime and degrades to a silent no-op when it is absent or disabled.
-// Emission NEVER blocks or breaks a vault command — by the time we publish, the
-// evidence write has already happened (G6 append-only), and a bus problem must
-// not change a verdict, the stdout JSON, or an exit code.
-//
-// Opt out entirely with WICKED_VAULT_NO_BUS=1.
+/**
+ * src/vault/bus.mjs — optional, fire-and-forget wicked-bus integration for vault commands.
+ *
+ * The vault is a zero-dependency, local-first primitive. wicked-bus is a
+ * *sibling* primitive, never a hard dependency: this module dynamic-imports it
+ * at runtime and degrades to a silent no-op when it is absent or disabled.
+ * Emission NEVER blocks or breaks a vault command — by the time we publish, the
+ * evidence write has already happened (G6 append-only), and a bus problem must
+ * not change a verdict, the stdout JSON, or an exit code.
+ *
+ * Opt out entirely with WICKED_VAULT_NO_BUS=1.
+ *
+ * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
 
-const DOMAIN = 'wicked-vault';
+const DOMAIN = 'wicked-testing';
 
 // Given a resolved file inside a package, return its ESM ("import") entry.
 // `require.resolve()` applies the "require" condition, so for a dual-published
@@ -46,12 +50,13 @@ function esmEntryForPackage(resolvedFile) {
 
 // Resolve the wicked-bus module namespace, or null. Two layers, in order:
 //   1. bare specifier — works when wicked-bus is installed globally or hoisted
-//      alongside the vault. import() uses the ESM condition, so it returns the
-//      real module.
+//      alongside wicked-testing. import() uses the ESM condition, so it returns
+//      the real module.
 //   2. the consumer project's node_modules (anchored at cwd) — the common case,
-//      since sibling tools live in the same repo the vault is invoked from, and
-//      the vault itself ships no node_modules. require.resolve locates the
-//      package; we import its ESM entry so we get real exports, not a CJS shim.
+//      since sibling tools live in the same repo wicked-testing is invoked from,
+//      and wicked-testing itself ships no node_modules for wicked-bus. require.resolve
+//      locates the package; we import its ESM entry so we get real exports, not a
+//      CJS shim.
 async function resolveBus(cwd) {
   try {
     return await import('wicked-bus');

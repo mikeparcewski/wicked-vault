@@ -1,3 +1,10 @@
+/**
+ * src/vault/hash.mjs — deterministic hashing utilities.
+ *
+ * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ * Source is stdlib-only; no external deps were introduced.
+ */
+
 import { createHash } from 'node:crypto';
 
 export function sha256(buf) {

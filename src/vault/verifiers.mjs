@@ -1,9 +1,15 @@
-import { spawnSync } from 'node:child_process';
+/**
+ * src/vault/verifiers.mjs — deterministic verifier registry.
+ *
+ * A verifier is a PURE, DETERMINISTIC function of (payload-view, params) (G7).
+ *   run(view, params, ctx) -> { status: 'pass' | 'fail' | 'error', detail }
+ * view = { text, json, raw } derived from the payload blob.
+ * An unknown kind is treated as ERROR by the caller (G5 fail-closed).
+ *
+ * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ */
 
-// A verifier is a PURE, DETERMINISTIC function of (payload-view, params) (G7).
-//   run(view, params, ctx) -> { status: 'pass' | 'fail' | 'error', detail }
-// view = { text, json, raw } derived from the payload blob.
-// An unknown kind is treated as ERROR by the caller (G5 fail-closed).
+import { spawnSync } from 'node:child_process';
 
 // For a --run capture the payload is {command, exit_code, stdout, stderr,...};
 // the "verifiable text" is stdout+stderr. For a raw --artifact it is the text.
