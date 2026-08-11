@@ -1,3 +1,14 @@
+/**
+ * src/vault/vault.mjs — core vault operations.
+ *
+ * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ * Provides: initVault, findRoot, record, verify, inspect, attest, listAttestations,
+ *           crossCheck, declareContract, listEntries, supersede, parseVerifier.
+ *
+ * The artifact store lives under .wicked-vault/ relative to the repo root.
+ * All writes are atomic (temp→rename) and cross-platform (win32 fallback path).
+ */
+
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -286,7 +297,7 @@ export function record(root, opts) {
     created_by_source: actor.source,
   };
   atomicWriteFileSync(join(P.entries, `${id}.json`), JSON.stringify(entry, null, 2));
-  return { id, envelope_hash, criteria_authored_by, status_at_record: sr.status, status_detail: sr.detail };
+  return { id, envelope_hash, criteria_authored_by, status_at_record: sr.status, status_detail: sr.detail, payload_sha256 };
 }
 
 // G6 — append-only supersede: record a NEW artifact stamped with `supersedes`,
@@ -417,25 +428,7 @@ export function attest(root, id, opts) {
   if (typeof opts.evaluator !== 'string' || opts.evaluator.trim() === '') throw new Error('attest requires --evaluator');
 
   // G10/D4 — mechanical independence, hardened. The judge must be a DELIBERATELY
-  // ASSERTED identity that differs from the worker. Three failure modes are
-  // closed here (all on top of the existing equality check):
-  //
-  //  (a) trivial-equality bypass — compare trimmed + case-folded so 'Alice',
-  //      'alice', and 'Alice ' can't sidestep the self-grade rejection.
-  //  (b) ambiguous worker identity — if the artifact was recorded under an
-  //      ambient identity ($USER / anonymous, created_by_source weak), the
-  //      independence claim cannot be trusted from a string compare alone.
-  //      We FAIL CLOSED unless the caller acknowledges it explicitly
-  //      (--allow-weak-worker-identity / opts.allowWeakWorkerIdentity), and we
-  //      stamp the weakness onto the attestation so audit can see it.
-  //  (c) ambiguous evaluator identity — the evaluator must be an explicit
-  //      assertion. A bare ambient identity for the JUDGE is refused: that is
-  //      exactly the silent self-grade the env var would otherwise enable.
-  //
-  // This is a stronger mechanical baseline + audit trail, NOT cryptographic
-  // independence. A determined human can still assert two distinct strings for
-  // the same person locally; real independence comes from a separate evaluator
-  // process/credential (see analyze-evidence skill) and the committed git trail.
+  // ASSERTED identity that differs from the worker.
   const evaluator = resolveActor(opts.evaluator);
   const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
 
@@ -447,9 +440,6 @@ export function attest(root, id, opts) {
     throw new Error(`attest refused (G10/D4): evaluator '${evaluator.id}' equals the artifact creator '${entry.created_by}' — a judgment must be independent of the worker`);
   }
 
-  // The worker's identity provenance governs how much the independence claim is
-  // worth. A weak (ambient) worker identity means "different string" proves
-  // little. Fail closed unless the caller explicitly accepts that risk.
   const workerSource = entry.created_by_source
     || (entry.created_by && entry.created_by !== 'unknown' ? 'legacy' : 'anonymous');
   const workerIdentityWeak = WEAK_IDENTITY_SOURCES.has(workerSource) || workerSource === 'legacy';

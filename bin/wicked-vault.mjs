@@ -1,13 +1,33 @@
 #!/usr/bin/env node
+/**
+ * bin/wicked-vault.mjs — wicked-vault CLI (absorbed into wicked-testing)
+ *
+ * Originally a standalone package (wicked-vault 0.4.3). Absorbed into
+ * wicked-testing per ECOSYSTEM-RATIONALIZATION.md §5a Phase B. The binary
+ * name `wicked-vault` is preserved so PATH lookups and existing integrations
+ * (loom peer manifest, garden resolver) continue to work without changes.
+ *
+ * Bus events emitted by this CLI (via src/vault/bus.mjs fire-and-forget):
+ *   wicked.test.evidence.recorded — on successful `record` (single recorded
+ *                                   envelope — distinct from the run-level
+ *                                   wicked.test.evidence.captured)
+ *   wicked.evidence.attested    — on successful `attest`
+ *   wicked.evidence.tampered    — on `verify` when hash_ok=false
+ *   wicked.contract.published   — on successful `declare-contract`
+ *   wicked.contract.checked     — on `cross-check`
+ *   wicked.evidence.superseded  — on successful `supersede`
+ *   wicked.claim.evaluated      — on `cross-check --with-attestations` per claim
+ */
+
 import { readFileSync } from 'node:fs';
 import {
   findRoot, initVault, record, verify, crossCheck, declareContract, listEntries, supersede,
   inspect, attest, listAttestations,
-} from '../src/vault.mjs';
-import { initBus } from '../src/bus.mjs';
+} from '../src/vault/vault.mjs';
+import { initBus } from '../src/vault/bus.mjs';
 
 // --criteria accepts inline text or @file (acceptance criteria are often
-// multi-line). Resolved here so src/vault.mjs stays pure text-in.
+// multi-line). Resolved here so src/vault/vault.mjs stays pure text-in.
 function resolveCriteria(val) {
   if (typeof val !== 'string') return val;
   if (val.startsWith('@')) return readFileSync(val.slice(1), 'utf8');
@@ -33,7 +53,7 @@ function emit(obj, ok) {
   process.exit(ok ? 0 : 1);
 }
 
-const HELP = `wicked-vault — local-first evidence primitive
+const HELP = `wicked-vault — local-first evidence primitive (part of wicked-testing)
 Record evidence with the acceptance criteria it must clear, re-derive integrity
 deterministically, and record independent third-party judgments. Never trusts a
 stored verdict; never lets work self-grade its own "done".
@@ -69,7 +89,7 @@ GLOBAL
   --cwd <dir>     Start the upward search for .wicked-vault/ at <dir> (default: cwd);
                   resolves to an ancestor vault if one exists above it — not a pinned root
   --help, -h      Show this help
-  --version, -v   Print the wicked-vault version
+  --version, -v   Print the version
 
 OUTPUT   JSON on stdout; exit code is the gate signal (0 = PASS / success).
 ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
@@ -77,8 +97,8 @@ ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
                                  (used by the G10/D4 independence check)
 
 Skills (AI CLIs):  wicked-vault:{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}
-Install skills:    npx wicked-vault-install        (run with --help for options)
-Docs:              https://github.com/mikeparcewski/wicked-vault
+Install skills:    npx wicked-testing-install        (run with --help for options)
+Docs:              https://github.com/mikeparcewski/wicked-testing
 `;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -90,8 +110,8 @@ if (cmd === undefined || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   process.exit(0);
 }
 
-// Version: like --help, must work outside any repo — resolved from this
-// package's own manifest, never from a vault.
+// Version: resolved from wicked-testing's own package.json (vault version is
+// no longer tracked separately — it moves with the wicked-testing release).
 if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   process.stdout.write(pkg.version + '\n');
@@ -138,9 +158,14 @@ try {
         actor: typeof args.actor === 'string' ? args.actor : undefined,
         cwd,
       });
-      publish('wicked.evidence.recorded', 'vault.record', {
+      // Emit wicked.test.evidence.recorded — the payload is a single recorded
+      // envelope (one artifact + its criteria), NOT a run's aggregated artifacts.
+      // It gets its own 4-seg verb, distinct from the run-level
+      // wicked.test.evidence.captured emitted by the acceptance pipeline.
+      publish('wicked.test.evidence.recorded', 'vault.record', {
         scope: args.scope, phase: args.phase, claim_id: args.claim, kind: args.kind,
         source: args.source, id: res.id, envelope_hash: res.envelope_hash,
+        payload_sha256: res.payload_sha256,
         criteria_authored_by: res.criteria_authored_by, status_at_record: res.status_at_record,
       });
       emit(res, true);
@@ -211,7 +236,8 @@ try {
     }
     case 'declare-contract': {
       const res = declareContract(root, args.scope, args.phase, JSON.parse(readFileSync(args.spec, 'utf8')));
-      publish('wicked.contract.declared', 'vault.contract', {
+      // Emit wicked.contract.published (catalog event — replaces wicked.contract.declared from standalone vault)
+      publish('wicked.contract.published', 'vault.contract', {
         scope: args.scope, phase: args.phase, contract_version: res.contract_version,
       });
       emit(res, true);

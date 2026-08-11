@@ -48,11 +48,11 @@ if [ -f "$BUS_DIR/lib/validate.js" ]; then
   node -e "
     const { validateEvent } = await import('$BUS_DIR/lib/validate.js');
     const events = [
-      ['wicked.evidence.recorded',   'vault.record'],
+      ['wicked.test.evidence.recorded', 'vault.record'],
       ['wicked.evidence.superseded', 'vault.supersede'],
       ['wicked.evidence.tampered',   'vault.tamper'],
       ['wicked.evidence.attested',   'vault.attest'],
-      ['wicked.contract.declared',   'vault.contract'],
+      ['wicked.contract.published',  'vault.contract'],
       ['wicked.contract.checked',    'vault.cross_check'],
       ['wicked.claim.evaluated',     'vault.cross_check'],
     ];
@@ -129,8 +129,8 @@ node -e "
   const lines = fs.readFileSync(process.env.VAULT_EMIT_LOG, 'utf8').trim().split('\n').filter(Boolean);
   const evs = lines.map(JSON.parse);
   const seen = new Set(evs.map(e => e.event_type));
-  const need = ['wicked.evidence.recorded', 'wicked.evidence.attested', 'wicked.contract.declared', 'wicked.contract.checked'];
-  const allWickedVault = evs.every(e => e.domain === 'wicked-vault');
+  const need = ['wicked.test.evidence.recorded', 'wicked.evidence.attested', 'wicked.contract.published', 'wicked.contract.checked'];
+  const allWickedVault = evs.every(e => e.domain === 'wicked-testing');
   const missing = need.filter(t => !seen.has(t));
   if (missing.length || !allWickedVault) {
     console.error('  -> FAIL: missing', missing, 'domain-ok=' + allWickedVault); process.exit(1);
@@ -143,7 +143,7 @@ node -e "
   if (att.payload.opinion !== 'pass' || att.payload.evaluator !== 'council-reviewer') {
     console.error('  -> FAIL: attested event payload wrong', att.payload); process.exit(1);
   }
-  console.log('  -> PASS: record + attest + declare-contract + cross-check emitted; domain=wicked-vault; overall=PASS');
+  console.log('  -> PASS: record + attest + declare-contract + cross-check emitted; domain=wicked-testing; overall=PASS');
 " || FAILED=1
 echo
 

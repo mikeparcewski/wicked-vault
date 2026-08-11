@@ -1,3 +1,9 @@
+/**
+ * src/vault/id.mjs — server-minted monotonic ID.
+ *
+ * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ */
+
 import { randomBytes } from 'node:crypto';
 
 // G1 — server-minted id. Time-prefixed hex so ids sort by creation order
