@@ -211,7 +211,7 @@ export function _manifestSurface(): void {
   expectType<Verdict>(VV2[3]);
 
   const opts: BuildManifestOptions = {
-    runRecord: { id: "run-1", status: "passed", started_at: "2026-08-11T00:00:00Z", finished_at: "2026-08-11T00:01:00Z" },
+    runRecord: { id: "run-1", project_id: "p-1", scenario_id: "s-1", status: "passed", started_at: "2026-08-11T00:00:00Z", finished_at: "2026-08-11T00:01:00Z" },
     scenarioRecord: { name: "export-csv" },
     verdictRecord: { verdict: "PASS", reviewer: "acceptance-test-reviewer" },
     evidenceDir: "/tmp/evidence/run-1",
