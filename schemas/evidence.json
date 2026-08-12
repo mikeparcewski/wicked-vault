@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/mikeparcewski/wicked-testing/schemas/evidence.json",
-  "title": "wicked-testing evidence manifest",
-  "description": "Public manifest schema for .wicked-testing/evidence/<run-id>/manifest.json. See docs/EVIDENCE.md. ADDITIVE-FIELD POLICY: this schema (and its nested objects) sets `additionalProperties: false` for producer integrity. The manifest grows additively under `manifest_version` semver — minor bumps add optional fields only (docs/EVIDENCE.md §7). Consumers validating against a vendored copy of this schema MUST gate on `manifest_version` and ignore unknown fields rather than reject them; do not enforce `additionalProperties: false` against payloads carrying a higher minor `manifest_version` than the schema copy you hold.",
+  "$id": "https://github.com/mikeparcewski/wicked-vault/schemas/evidence.json",
+  "title": "qe evidence manifest",
+  "description": "Public manifest schema for <ledger-root>/evidence/<run-id>/manifest.json (root .wicked-qe/, or a legacy .wicked-testing/). See docs/EVIDENCE.md. ADDITIVE-FIELD POLICY: this schema (and its nested objects) sets `additionalProperties: false` for producer integrity. The manifest grows additively under `manifest_version` semver — minor bumps add optional fields only (docs/EVIDENCE.md §7). Consumers validating against a vendored copy of this schema MUST gate on `manifest_version` and ignore unknown fields rather than reject them; do not enforce `additionalProperties: false` against payloads carrying a higher minor `manifest_version` than the schema copy you hold.",
   "type": "object",
   "required": [
     "manifest_version",
@@ -38,7 +38,7 @@
     },
     "verdict": {
       "type": "object",
-      "description": "The recorded verdict. `additionalProperties: false` here is a PRODUCER-INTEGRITY guard, not a consumer contract: it stops wicked-testing from silently emitting unknown keys. The manifest evolves ADDITIVELY under `manifest_version` (semver) — minor bumps add OPTIONAL fields and never change or remove existing ones (see docs/EVIDENCE.md §7). STRICT external validators MUST NOT vendor this `additionalProperties: false` verbatim against payloads from a newer producer; gate on `manifest_version` and ignore unknown fields instead, or a future additive field (as `equivalence` was in 1.1.0) will be falsely rejected.",
+      "description": "The recorded verdict. `additionalProperties: false` here is a PRODUCER-INTEGRITY guard, not a consumer contract: it stops the qe producer from silently emitting unknown keys. The manifest evolves ADDITIVELY under `manifest_version` (semver) — minor bumps add OPTIONAL fields and never change or remove existing ones (see docs/EVIDENCE.md §7). STRICT external validators MUST NOT vendor this `additionalProperties: false` verbatim against payloads from a newer producer; gate on `manifest_version` and ignore unknown fields instead, or a future additive field (as `equivalence` was in 1.1.0) will be falsely rejected.",
       "required": ["value", "reviewer", "recorded_at"],
       "properties": {
         "value":    { "type": "string", "enum": ["PASS", "FAIL", "PARTIAL", "CONDITIONAL", "INCONCLUSIVE", "N-A", "SKIP"] },
@@ -64,12 +64,12 @@
     },
     "environment": {
       "type": "object",
-      "required": ["os", "wicked_testing_version"],
+      "required": ["os", "qe_version"],
       "properties": {
         "os":   { "type": "string" },
         "node": { "type": "string" },
         "cli":  { "type": "string" },
-        "wicked_testing_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" }
+        "qe_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" }
       },
       "additionalProperties": true
     },

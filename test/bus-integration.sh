@@ -130,7 +130,7 @@ node -e "
   const evs = lines.map(JSON.parse);
   const seen = new Set(evs.map(e => e.event_type));
   const need = ['wicked.test.evidence.recorded', 'wicked.evidence.attested', 'wicked.contract.published', 'wicked.contract.checked'];
-  const allWickedVault = evs.every(e => e.domain === 'wicked-testing');
+  const allWickedVault = evs.every(e => e.domain === 'qe');
   const missing = need.filter(t => !seen.has(t));
   if (missing.length || !allWickedVault) {
     console.error('  -> FAIL: missing', missing, 'domain-ok=' + allWickedVault); process.exit(1);
@@ -143,7 +143,7 @@ node -e "
   if (att.payload.opinion !== 'pass' || att.payload.evaluator !== 'council-reviewer') {
     console.error('  -> FAIL: attested event payload wrong', att.payload); process.exit(1);
   }
-  console.log('  -> PASS: record + attest + declare-contract + cross-check emitted; domain=wicked-testing; overall=PASS');
+  console.log('  -> PASS: record + attest + declare-contract + cross-check emitted; domain=qe; overall=PASS');
 " || FAILED=1
 echo
 

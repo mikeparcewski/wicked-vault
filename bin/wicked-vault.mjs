@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * bin/wicked-vault.mjs — wicked-vault CLI (absorbed into wicked-testing)
+ * bin/wicked-vault.mjs — the wicked-vault CLI.
  *
- * Originally a standalone package (wicked-vault 0.4.3). Absorbed into
- * wicked-testing per ECOSYSTEM-RATIONALIZATION.md §5a Phase B. The binary
- * name `wicked-vault` is preserved so PATH lookups and existing integrations
- * (loom peer manifest, garden resolver) continue to work without changes.
+ * A standalone, self-contained infra package (its own repo + npm package).
+ * It spent a period absorbed into wicked-testing (ECOSYSTEM-RATIONALIZATION
+ * §5a Phase B) and was re-carved before the Phase 6c wicked-testing
+ * retirement. The binary name `wicked-vault` has been stable throughout, so
+ * PATH lookups and integrations (loom peer manifest, garden resolver) are
+ * unaffected.
  *
  * Bus events emitted by this CLI (via src/vault/bus.mjs fire-and-forget):
  *   wicked.test.evidence.recorded — on successful `record` (single recorded
@@ -53,7 +55,7 @@ function emit(obj, ok) {
   process.exit(ok ? 0 : 1);
 }
 
-const HELP = `wicked-vault — local-first evidence primitive (part of wicked-testing)
+const HELP = `wicked-vault — local-first evidence primitive
 Record evidence with the acceptance criteria it must clear, re-derive integrity
 deterministically, and record independent third-party judgments. Never trusts a
 stored verdict; never lets work self-grade its own "done".
@@ -97,8 +99,8 @@ ENV      WICKED_VAULT_NO_BUS=1   Disable optional wicked-bus event emission
                                  (used by the G10/D4 independence check)
 
 Skills (AI CLIs):  wicked-vault:{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}
-Install skills:    npx wicked-testing-install        (run with --help for options)
-Docs:              https://github.com/mikeparcewski/wicked-testing
+Install skills:    npx wicked-vault-install          (run with --help for options)
+Docs:              https://github.com/mikeparcewski/wicked-vault
 `;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -110,8 +112,7 @@ if (cmd === undefined || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   process.exit(0);
 }
 
-// Version: resolved from wicked-testing's own package.json (vault version is
-// no longer tracked separately — it moves with the wicked-testing release).
+// Version: resolved from wicked-vault's own package.json.
 if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   process.stdout.write(pkg.version + '\n');

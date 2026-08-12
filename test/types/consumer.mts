@@ -3,7 +3,7 @@
  *
  * Imports EVERY symbol declared by the hand-authored index.d.mts /
  * src/vault/*.d.mts / lib/manifest.d.mts declarations the way a downstream
- * strict-TS consumer (wicked-crew gates, wicked-testing) would, and
+ * strict-TS consumer (wicked-crew gates, wicked-garden qe) would, and
  * exercises the key signatures. `npm run typecheck` compiles this with
  * `tsc --noEmit` under strict nodenext resolution; if the declarations
  * drift from the surface this file uses, CI fails loudly.
@@ -215,8 +215,11 @@ export function _manifestSurface(): void {
     scenarioRecord: { name: "export-csv" },
     verdictRecord: { verdict: "PASS", reviewer: "acceptance-test-reviewer" },
     evidenceDir: "/tmp/evidence/run-1",
-    wickedTestingVersion: "0.2.0",
+    qeVersion: "0.2.0",
   };
+  // Legacy alias still type-checks for one release cycle.
+  const legacyOpts: BuildManifestOptions = { ...opts, qeVersion: undefined, wickedTestingVersion: "0.1.0" };
+  void legacyOpts;
   const { manifest, path } = buildManifest(opts);
   expectType<EvidenceManifest>(manifest);
   expectType<string>(path);

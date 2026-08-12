@@ -3,7 +3,13 @@
 **Status:** v2 — council-reviewed twice (see `adr/0001-…` and
 `adr/0002-independent-evaluation-and-criteria-binding.md`). Standalone product
 confirmed. Defines the contracts every consumer integrates against. Sibling to
-wicked-bus / wicked-brain / wicked-testing.
+wicked-bus / wicked-brain.
+
+> **Historical note (Phase 6c):** `wicked-testing` — named throughout this
+> spec as a consumer — has retired. Its skill surface is wicked-garden's `qe`
+> domain, its ledger is the `wicked-ledger` package, and the acceptance gate
+> lives in wicked-crew. Read "wicked-testing" below as that successor set;
+> decision rows (e.g. D2) are preserved as written.
 
 > v1 changed §4 (G3/G4 honest scoping + new G9), §5 (scope cut to 5
 > deterministic verifiers; `llm_eval` removed), §6 (per-entry storage), and §12
@@ -21,7 +27,8 @@ wicked-bus / wicked-brain / wicked-testing.
 wicked-vault is the **evidence primitive**: it records claim-backing
 artifacts, hashes them tamper-evidently, and *re-derives* their status on
 demand — never trusting a stored verdict. It is consumed by wicked-garden's
-compiled harness, by wicked-testing, by hand-run builds, and by CI directly.
+compiled harness, by the qe pipeline (garden's qe skills + the wicked-ledger
+data layer), by hand-run builds, and by CI directly.
 
 Derived from the proven semantics of command_iq's `the-vault.EvidencePort`
 (server-minted ids, four-column envelope hash, never-trust-cached
@@ -35,7 +42,7 @@ app-free, git-native standalone.
 | Owns (the primitive) | Refuses (lives in a consumer) |
 |---|---|
 | `record` — independent capture: vault runs the source, hashes the payload, mints the id | "is the work *done*?" → wicked-garden gate logic / triggers |
-| `verify` — re-derive status against the payload; never read a cached status | scenario / flake / verdict-*history* semantics → wicked-testing |
+| `verify` — re-derive status against the payload; never read a cached status | scenario / flake / verdict-*history* semantics → wicked-ledger |
 | `cross-check` — claims → artifacts → verdict vs. a pinned contract | claim *authoring* / work-shape / archetype → wicked-garden |
 | `supersede` — atomic, append-only replacement | risk-surface → which-claims policy (consumer supplies the contract) |
 | verifier family + tamper-evidence (envelope hash; git as audit chain) | notification / dashboards (subscribe to vault events instead) |
@@ -49,7 +56,7 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
 ## 2. Place in the family
 
 ```
-                 wicked-garden (compiler+harness)        wicked-testing (ledger)
+                 wicked-garden (compiler+harness)        wicked-ledger (qe ledger)
                           │ declares contracts,                  │ records runs,
                           │ fires cross-check triggers           │ cites artifact ids
                           ▼                                       ▼
@@ -66,9 +73,10 @@ artifact still verify?* and *is this scope+phase's contract satisfied?*
   per-repo contracts and triggers that call `cross-check`. Its
   `scripts/qe/evidence_tracker.py` ("satisfied when *claimed*") is **replaced**
   by reading vault verdicts ("satisfied when *verified*").
-- **wicked-testing**: substrate-ready consumer. A scenario run `record`s its
-  evidence; the ledger stores its verdict citing the `artifact_id`; history
-  queries `verify` to re-derive. (Migration not forced — see Decision D2.)
+- **the qe pipeline** (garden's qe skills + wicked-ledger): substrate-ready
+  consumer. A scenario run `record`s its evidence; the ledger stores its
+  verdict citing the `artifact_id`; history queries `verify` to re-derive.
+  (Migration not forced — see Decision D2.)
 - **wicked-bus**: vault emits lifecycle events; consumers subscribe.
 
 ---
@@ -190,7 +198,7 @@ reproducible.**
   claim in the contract; `record` rejects a downgrade (e.g. swapping a strict
   verifier for a weaker one, or pointing `source` at a different command).
 - **G9 mechanical evaluation (the boundary, enforced)** — the vault never
-  *authors* a contract; the consumer (wicked-garden compiler / wicked-testing)
+  *authors* a contract; the consumer (wicked-garden compiler / the qe pipeline)
   does. `cross-check`'s verdict is a pure function of `(consumer-authored
   contract, recorded artifacts)`: for each required claim, does an active
   artifact exist whose `verify()` passes and whose `source`/`verifier` match the
@@ -373,9 +381,9 @@ judge runs in the `wicked-vault:analyze-evidence` skill, which orchestrates
 ## 9. Integration-discovery contract
 
 Registers provider `wicked-vault` with capabilities `[record, verify,
-cross-check, declare-contract]`. wicked-garden and wicked-testing discover it
+cross-check, declare-contract]`. wicked-garden and the qe pipeline discover it
 the same way they discover bus/brain; if absent, consumers degrade to a
-documented "no-vault" path (garden: emit a claims-doc-only lint; testing:
+documented "no-vault" path (garden: emit a claims-doc-only lint; qe:
 local evidence JSON as today).
 
 ---
@@ -394,7 +402,7 @@ local evidence JSON as today).
 3. verdict gates: `overall != PASS` ⇒ block / CI red. The agent never supplies
    the verdict; it can only `record` artifacts the vault re-derives.
 
-**C. wicked-testing — substrate**
+**C. the qe pipeline — substrate**
 1. scenario run ⇒ `record --run` (capture).
 2. ledger stores its verdict + `artifact_id`.
 3. history/flake queries ⇒ `verify <id>` to re-derive past evidence.
