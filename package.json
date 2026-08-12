@@ -1,8 +1,24 @@
 {
   "name": "wicked-vault",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Local-first evidence primitive — record evidence with its acceptance criteria, re-derive integrity deterministically, and record independent third-party judgments. Never trusts a stored verdict, never lets work self-grade its own \"done\".",
   "type": "module",
+  "main": "./index.mjs",
+  "types": "./index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./index.d.mts",
+      "default": "./index.mjs"
+    },
+    "./manifest": {
+      "types": "./lib/manifest.d.mts",
+      "default": "./lib/manifest.mjs"
+    },
+    "./lib/*.mjs": "./lib/*.mjs",
+    "./src/vault/*.mjs": "./src/vault/*.mjs",
+    "./schemas/*.json": "./schemas/*.json",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "wicked-vault": "bin/wicked-vault.mjs",
     "wicked-vault-install": "install.mjs"
@@ -41,7 +57,9 @@
     "lib",
     "schemas",
     "skills",
-    "install.mjs"
+    "install.mjs",
+    "index.mjs",
+    "index.d.mts"
   ],
   "scripts": {
     "test": "bash test/cli-baseline.sh && bash test/atomic-write.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh",
@@ -50,6 +68,11 @@
     "prove:attestation": "bash test/attestation.sh",
     "prove:atomic": "bash test/atomic-write.sh",
     "prove:bus": "bash test/bus-integration.sh",
-    "install-skills": "node install.mjs"
+    "install-skills": "node install.mjs",
+    "typecheck": "tsc -p test/types/tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
   }
 }

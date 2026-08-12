@@ -20,6 +20,6 @@ jobs:
     with:
       package_name: wicked-vault
       os_matrix: '["ubuntu-latest"]'
-      test_cmd: 'bash test/cli-baseline.sh && bash test/attestation.sh && bash test/bus-integration.sh'
+      test_cmd: 'bash test/cli-baseline.sh && bash test/attestation.sh && bash test/bus-integration.sh && npm run typecheck'
       enable_sync_pr: true
     secrets: inherit
