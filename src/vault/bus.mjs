@@ -10,7 +10,8 @@
  *
  * Opt out entirely with WICKED_VAULT_NO_BUS=1.
  *
- * Absorbed from wicked-vault 0.4.3 (archived) per ECOSYSTEM-RATIONALIZATION.md §5a Phase B.
+ * Absorbed from wicked-vault 0.4.3 per ECOSYSTEM-RATIONALIZATION.md §5a Phase B;
+ * standalone again since the Phase 6c wicked-testing retirement.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -18,7 +19,8 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
 
-const DOMAIN = 'wicked-testing';
+// Phase 6c retirement: vault events stamp the qe domain (was 'wicked-testing').
+const DOMAIN = 'qe';
 
 // Given a resolved file inside a package, return its ESM ("import") entry.
 // `require.resolve()` applies the "require" condition, so for a dual-published
@@ -53,8 +55,8 @@ function esmEntryForPackage(resolvedFile) {
 //      alongside wicked-testing. import() uses the ESM condition, so it returns
 //      the real module.
 //   2. the consumer project's node_modules (anchored at cwd) — the common case,
-//      since sibling tools live in the same repo wicked-testing is invoked from,
-//      and wicked-testing itself ships no node_modules for wicked-bus. require.resolve
+//      since sibling tools live in the same repo the vault is invoked from,
+//      and wicked-vault itself ships no node_modules for wicked-bus. require.resolve
 //      locates the package; we import its ESM entry so we get real exports, not a
 //      CJS shim.
 async function resolveBus(cwd) {

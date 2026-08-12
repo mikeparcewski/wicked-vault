@@ -12,7 +12,7 @@ criteria it must clear, checks integrity deterministically, and records independ
 third-party judgments — never trusting a stored verdict, never letting work self-grade
 its own "done".**
 
-Sibling to wicked-bus / wicked-brain / wicked-testing. Works with **Claude Code**,
+Sibling to wicked-bus / wicked-brain. Works with **Claude Code**,
 **Gemini**, **Copilot**, **Codex**, **Cursor**, **Kiro**, and **Antigravity** (skills
 install across all of them).
 
@@ -187,7 +187,7 @@ and runs in CI on every push.
 
 All events use `domain: wicked-vault`. `wicked.contract.checked` carries the
 mechanical verdict (`PASS` / `REJECT` / `ERROR`) — the signal a gate consumer
-(wicked-testing, wicked-garden) subscribes to. `wicked.evidence.attested` carries
+(wicked-crew, wicked-garden) subscribes to. `wicked.evidence.attested` carries
 an independent `opinion` + its `evaluator`/`model` provenance (a judgment-tier
 signal, *not* a deterministic verdict). `wicked.evidence.tampered` is the
 high-value alarm: a payload, criteria, or envelope diverged from what was

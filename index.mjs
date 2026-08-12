@@ -4,7 +4,7 @@
  * The programmatic surface of the local-first evidence primitive. Everything
  * here is also reachable by deep subpath (e.g.
  * `import { record } from "wicked-vault/src/vault/vault.mjs"`) — the barrel
- * exists so consumers (wicked-crew gates, wicked-testing) can
+ * exists so consumers (wicked-crew gates, wicked-garden's qe skills) can
  * `import { record, verify, crossCheck } from "wicked-vault"` and get the
  * hand-authored type declarations (index.d.mts) with it.
  *

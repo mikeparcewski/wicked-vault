@@ -16,7 +16,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const skillsSource = join(__dirname, "skills");
 const home = homedir();
 
-// Claude-root candidate builder. Mirrors the wicked-testing / wicked-brain /
+// Claude-root candidate builder. Mirrors the wicked-brain /
 // wicked-bus fix: $CLAUDE_CONFIG_DIR is authoritative when set; otherwise
 // probe common alt-config layouts. Claude Code's config root is redirectable,
 // and a hardcoded ~/.claude silently misses users on shared-home /
@@ -102,7 +102,7 @@ console.log("wicked-vault installer\n");
 // Flag parser supporting both --flag=value and --flag value forms, plus
 // narrow string-boolean coercion ("true" / "false" → booleans). The ad-hoc
 // parser this replaces silently dropped space-separated values — same bug
-// that hit wicked-testing 0.3.2 / wicked-brain 0.3.7 / wicked-bus.
+// that hit wicked-brain 0.3.7 / wicked-bus (and the retired wicked-testing 0.3.2).
 const flagValue = (name) => {
   const f = args.find(a => a === `--${name}` || a.startsWith(`--${name}=`));
   if (!f) return null;
