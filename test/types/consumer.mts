@@ -36,6 +36,8 @@ import {
   buildManifest,
   MANIFEST_VERSION,
   VERDICT_VALUES,
+  resolveRuntimeProfile,
+  assertRuntimeSupported,
 } from "wicked-vault";
 
 import type {
@@ -78,6 +80,9 @@ import type {
   BuildManifestOptions,
   ManifestArtifact,
   VerdictEquivalence,
+  // runtime-profile types
+  RuntimeProfile,
+  RuntimeProfileName,
 } from "wicked-vault";
 
 // --- Deep subpaths (the pre-barrel consumer shape) keep resolving ---
@@ -227,4 +232,12 @@ export function _manifestSurface(): void {
   expectType<ManifestArtifact[]>(manifest.artifacts);
   expectType<VerdictEquivalence | undefined>(manifest.verdict.equivalence);
   expectType<{ manifest: EvidenceManifest; path: string }>(manifestBuild(opts));
+}
+
+export function _runtimeSurface(): void {
+  const profile: RuntimeProfile = resolveRuntimeProfile();
+  expectType<RuntimeProfileName>(profile.runtime);
+  expectType<string | undefined>(profile.storeUrl);
+  expectType<RuntimeProfile>(resolveRuntimeProfile({ WICKED_RUNTIME: "local" }));
+  expectType<RuntimeProfile>(assertRuntimeSupported({ WICKED_RUNTIME: "local" }));
 }

@@ -67,6 +67,10 @@ export type {
 export { initBus } from "./src/vault/bus.mjs";
 export type { BusPublisher } from "./src/vault/bus.mjs";
 
+// --- WICKED_RUNTIME profile resolution (foundation team-profile seam) ---
+export { resolveRuntimeProfile, assertRuntimeSupported } from "./src/vault/runtime.mjs";
+export type { RuntimeProfile, RuntimeProfileName } from "./src/vault/runtime.mjs";
+
 // --- Evidence-manifest builder + verdict enum (shared with wicked-ledger) ---
 export { buildManifest, MANIFEST_VERSION, VERDICT_VALUES } from "./lib/manifest.mjs";
 export type {

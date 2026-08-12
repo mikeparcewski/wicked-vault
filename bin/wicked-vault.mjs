@@ -27,6 +27,7 @@ import {
   inspect, attest, listAttestations,
 } from '../src/vault/vault.mjs';
 import { initBus } from '../src/vault/bus.mjs';
+import { assertRuntimeSupported } from '../src/vault/runtime.mjs';
 
 // --criteria accepts inline text or @file (acceptance criteria are often
 // multi-line). Resolved here so src/vault/vault.mjs stays pure text-in.
@@ -117,6 +118,15 @@ if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   process.stdout.write(pkg.version + '\n');
   process.exit(0);
+}
+
+// WICKED_RUNTIME seam: refuse a team profile BEFORE any vault or bus work —
+// the only store driver is the in-repo git-native store (src/vault/runtime.mjs).
+// After help/version so `wicked-vault --help` still works under any profile.
+try {
+  assertRuntimeSupported();
+} catch (err) {
+  emit({ error: err.message, code: err.code || 'ERR_WICKED_RUNTIME' }, false);
 }
 
 const args = parseArgs(rest);

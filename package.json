@@ -62,7 +62,7 @@
     "index.d.mts"
   ],
   "scripts": {
-    "test": "bash test/cli-baseline.sh && bash test/atomic-write.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh",
+    "test": "bash test/cli-baseline.sh && bash test/atomic-write.sh && bash test/attestation.sh && bash test/bus-integration.sh && bash test/verifiers.sh && bash test/runtime-profile.sh",
     "prove": "bash test/prove-on-memos.sh",
     "prove:verifiers": "bash test/verifiers.sh",
     "prove:attestation": "bash test/attestation.sh",
