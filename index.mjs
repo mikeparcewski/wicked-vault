@@ -40,5 +40,8 @@ export { VERIFIERS, runVerifier } from "./src/vault/verifiers.mjs";
 // --- Optional fire-and-forget wicked-bus integration ---
 export { initBus } from "./src/vault/bus.mjs";
 
+// --- WICKED_RUNTIME profile resolution (foundation team-profile seam) ---
+export { resolveRuntimeProfile, assertRuntimeSupported } from "./src/vault/runtime.mjs";
+
 // --- Evidence-manifest builder + verdict enum (shared with wicked-ledger) ---
 export { buildManifest, MANIFEST_VERSION, VERDICT_VALUES } from "./lib/manifest.mjs";
