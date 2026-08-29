@@ -12,7 +12,7 @@ criteria it must clear, checks integrity deterministically, and records independ
 third-party judgments — never trusting a stored verdict, never letting work self-grade
 its own "done".**
 
-Sibling to wicked-bus / wicked-brain. Works with **Claude Code**,
+Sibling to wicked-bus / wicked-ledger. Works with **Claude Code**,
 **Gemini**, **Copilot**, **Codex**, **Cursor**, **Kiro**, and **Antigravity** (skills
 install across all of them).
 
@@ -44,25 +44,28 @@ records independent judgments without re-deriving them (G10). It cannot decide
 
 ## Install
 
-The CLI runs via `npx wicked-vault <command>` once the package is present. To
-teach your AI CLIs/IDEs how to use it, install the skills across every detected
-config root (Claude Code, Gemini, Copilot, Codex, Cursor, Kiro, Antigravity):
+The `wicked-vault` npm package ships both binaries — `wicked-vault` (the CLI)
+and `wicked-vault-install` (the skills installer) — so install it globally to
+put them on your PATH. To teach your AI CLIs/IDEs how to use it, install the
+skills across every detected config root (Claude Code, Gemini, Copilot, Codex,
+Cursor, Kiro, Antigravity):
 
 ```bash
-npx wicked-vault-install               # detect and install everywhere
-npx wicked-vault-install --cli=claude  # one CLI only (comma-separated for several)
-npx wicked-vault-install --path ~/.claude   # a specific config root
-npx wicked-vault-install --help        # options
+npm install -g wicked-vault
+wicked-vault-install               # detect and install everywhere
+wicked-vault-install --cli=claude  # one CLI only (comma-separated for several)
+wicked-vault-install --path ~/.claude   # a specific config root
+wicked-vault-install --help        # options
 ```
 
-This mirrors the shared wicked-bus / wicked-brain installer: `$CLAUDE_CONFIG_DIR`
+This mirrors the shared wicked-bus installer: `$CLAUDE_CONFIG_DIR`
 is honored, alt-config layouts are probed, and skills land as
 `wicked-vault-{init,record-evidence,verify-evidence,analyze-evidence,cross-check-evidence,update}/`
 under each CLI's `skills/`. If wicked-bus is installed, the installer also
 registers the vault as a bus provider (see below).
 
 **Updating:** say `wicked-vault:update` to your agent, or run
-`npm install -g wicked-vault@latest && npx wicked-vault-install` — it compares
+`npm install -g wicked-vault@latest && wicked-vault-install` — it compares
 your version against npm and refreshes the skills across every CLI. Both
 binaries support `--help`.
 
