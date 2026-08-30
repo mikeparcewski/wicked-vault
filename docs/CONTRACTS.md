@@ -3,13 +3,15 @@
 **Status:** v2 — council-reviewed twice (see `adr/0001-…` and
 `adr/0002-independent-evaluation-and-criteria-binding.md`). Standalone product
 confirmed. Defines the contracts every consumer integrates against. Sibling to
-wicked-bus / wicked-brain.
+wicked-bus / wicked-brain. <!-- historical: v2-era sibling framing; wicked-brain retired 2026-08 into wicked-estate -->
 
+<!-- historical -->
 > **Historical note (Phase 6c):** `wicked-testing` — named throughout this
 > spec as a consumer — has retired. Its skill surface is wicked-garden's `qe`
 > domain, its ledger is the `wicked-ledger` package, and the acceptance gate
 > lives in wicked-crew. Read "wicked-testing" below as that successor set;
 > decision rows (e.g. D2) are preserved as written.
+<!-- /historical -->
 
 > v1 changed §4 (G3/G4 honest scoping + new G9), §5 (scope cut to 5
 > deterministic verifiers; `llm_eval` removed), §6 (per-entry storage), and §12
@@ -435,7 +437,7 @@ All resolved by the council + ADR-0001.
 |---|---|---|---|
 | D0 | standalone vs incubate | **standalone product** — council's incubate verdict overridden; command_iq's proven `EvidencePort` + Phase-0 proof answer the "premature" critique | user adjudication (ADR-0001) |
 | D1 | evidence location | **in-repo `.wicked-vault/`, committed** — evidence travels with the PR | accepted |
-| D2 | wicked-testing relationship | **substrate-ready, no forced migration** | accepted |
+| D2 | wicked-testing relationship | **substrate-ready, no forced migration** | accepted <!-- historical --> |
 | D3 | runtime/packaging | **node/npm + CLI** (CLI authoritative) — runtime-fragmentation cost accepted as a tradeoff | accepted (council Q3 dissent noted) |
 | D4 | verifier scope | **5 deterministic verifiers in v1 core**; nondeterministic = separate observation extension; `llm_eval` removed | council Q5 |
 | D5 | source of truth | **`entries/<ulid>.json` (one file per artifact)** + content-addressed payloads; sqlite derived. *Supersedes v0 single-manifest.* | council Q2 (mandatory under D0) |

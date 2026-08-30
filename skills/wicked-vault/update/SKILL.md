@@ -133,7 +133,7 @@ Skills refreshed in {N} CLIs: {list}
 
 ## Notes
 
-- wicked-vault has **no background server** to update (unlike wicked-brain) —
+- wicked-vault has **no background server** to update (unlike wicked-brain) — <!-- historical: wicked-brain (retired 2026-08) was the sibling that ran a background server -->
   updating is just the package + the skills.
 - The published package is provenance-signed; `npm view wicked-vault --json`
   shows the attestation under `dist.attestations` if you want to confirm

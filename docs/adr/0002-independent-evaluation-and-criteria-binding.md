@@ -103,7 +103,7 @@ as such.
   `created_by` (catches the lazy/default self-grade). Spoofable, but a mechanical
   baseline + audit trail, not pure honor-system.
 - The `analyze-evidence` skill invokes an evaluator **distinct from the worker** —
-  an external model CLI or isolated subagent (lineage: wicked-testing reviewer
+  an external model CLI or isolated subagent (lineage: wicked-testing reviewer <!-- historical -->
   isolation; `wicked-garden:jam:council` external CLIs).
 - Stronger enforcement (signed evaluator identity, separate credential boundary)
   is named as future hardening; v1 ships the mechanical check + recorded
