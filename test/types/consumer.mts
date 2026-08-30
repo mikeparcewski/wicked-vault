@@ -34,8 +34,10 @@ import {
   runVerifier,
   initBus,
   buildManifest,
+  validateManifest,
   MANIFEST_VERSION,
   VERDICT_VALUES,
+  CLAIM_LEVELS,
   resolveRuntimeProfile,
   assertRuntimeSupported,
 } from "wicked-vault";
@@ -75,11 +77,15 @@ import type {
   BusPublisher,
   // manifest types
   Verdict,
+  ClaimLevel,
   RunStatus,
   EvidenceManifest,
   BuildManifestOptions,
   ManifestArtifact,
   VerdictEquivalence,
+  ScenarioEvidenceLeg,
+  ScenarioEvidence,
+  ManifestViolation,
   // runtime-profile types
   RuntimeProfile,
   RuntimeProfileName,
@@ -91,7 +97,7 @@ import { sha256 as deepSha256 } from "wicked-vault/src/vault/hash.mjs";
 import { newId as deepNewId } from "wicked-vault/src/vault/id.mjs";
 import { runVerifier as deepRunVerifier } from "wicked-vault/src/vault/verifiers.mjs";
 import { initBus as deepInitBus } from "wicked-vault/src/vault/bus.mjs";
-import { buildManifest as manifestBuild, VERDICT_VALUES as VV2 } from "wicked-vault/manifest";
+import { buildManifest as manifestBuild, validateManifest as vm2, VERDICT_VALUES as VV2, CLAIM_LEVELS as CL2 } from "wicked-vault/manifest";
 import { MANIFEST_VERSION as MV2 } from "wicked-vault/lib/manifest.mjs";
 
 function expectType<T>(_value: T): void {}
@@ -214,13 +220,32 @@ export function _manifestSurface(): void {
   expectType<string>(MV2);
   expectType<Verdict>(VERDICT_VALUES[0]);
   expectType<Verdict>(VV2[3]);
+  expectType<ClaimLevel>(CLAIM_LEVELS[0]);
+  expectType<ClaimLevel>(CL2[2]);
 
+  const legs: ScenarioEvidenceLeg[] = [
+    { leg: "ui", claim_level: "certified" },
+    { leg: "acceptance", claim_level: "machinery-verified", reason: "API-only by design" },
+  ];
+  const scenarioEvidence: ScenarioEvidence = {
+    scenario: "S11 — terminal state + acceptance read",
+    status: "PASS",
+    claim_level: "machinery-verified",
+    ui_steps: ["Completed badge rendered"],
+    screenshots: ["S11-terminal-run.png"],
+    wire_evidence: { events: 157 },
+    db_evidence: "ndjson tail sessionCompleted",
+    terminal_state_proof: "sessionCompleted in the durable log",
+    notes: ["acceptance leg API-substituted (disclosed)"],
+    legs,
+  };
   const opts: BuildManifestOptions = {
     runRecord: { id: "run-1", project_id: "p-1", scenario_id: "s-1", status: "passed", started_at: "2026-08-11T00:00:00Z", finished_at: "2026-08-11T00:01:00Z" },
     scenarioRecord: { name: "export-csv" },
     verdictRecord: { verdict: "PASS", reviewer: "acceptance-test-reviewer" },
     evidenceDir: "/tmp/evidence/run-1",
     qeVersion: "0.2.0",
+    scenarioEvidence,
   };
   // Legacy alias still type-checks for one release cycle.
   const legacyOpts: BuildManifestOptions = { ...opts, qeVersion: undefined, wickedTestingVersion: "0.1.0" };
@@ -231,7 +256,17 @@ export function _manifestSurface(): void {
   expectType<RunStatus>(manifest.status);
   expectType<ManifestArtifact[]>(manifest.artifacts);
   expectType<VerdictEquivalence | undefined>(manifest.verdict.equivalence);
+  expectType<ScenarioEvidence | undefined>(manifest.scenario_evidence);
+  expectType<ClaimLevel | undefined>(manifest.scenario_evidence?.claim_level);
   expectType<{ manifest: EvidenceManifest; path: string }>(manifestBuild(opts));
+
+  // reviewer-side validation: unknown in, ok + violations out (never throws)
+  const res = validateManifest(JSON.parse("{}"));
+  expectType<boolean>(res.ok);
+  expectType<ManifestViolation[]>(res.violations);
+  expectType<string>(res.violations[0]!.field);
+  expectType<string>(res.violations[0]!.message);
+  expectType<{ ok: boolean; violations: ManifestViolation[] }>(vm2(manifest));
 }
 
 export function _runtimeSurface(): void {

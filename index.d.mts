@@ -71,10 +71,11 @@ export type { BusPublisher } from "./src/vault/bus.mjs";
 export { resolveRuntimeProfile, assertRuntimeSupported } from "./src/vault/runtime.mjs";
 export type { RuntimeProfile, RuntimeProfileName } from "./src/vault/runtime.mjs";
 
-// --- Evidence-manifest builder + verdict enum (shared with wicked-ledger) ---
-export { buildManifest, MANIFEST_VERSION, VERDICT_VALUES } from "./lib/manifest.mjs";
+// --- Evidence-manifest builder + validator + verdict/claim enums (shared with wicked-ledger) ---
+export { buildManifest, validateManifest, MANIFEST_VERSION, VERDICT_VALUES, CLAIM_LEVELS } from "./lib/manifest.mjs";
 export type {
   Verdict,
+  ClaimLevel,
   RunStatus,
   RunLifecycleStatus,
   EquivalenceMethod,
@@ -84,6 +85,9 @@ export type {
   ManifestEnvironment,
   ManifestVerdict,
   ManifestAssertion,
+  ScenarioEvidenceLeg,
+  ScenarioEvidence,
+  ManifestViolation,
   EvidenceManifest,
   BuildManifestRunRecord,
   BuildManifestScenarioRecord,
