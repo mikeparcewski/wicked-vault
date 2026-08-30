@@ -48,7 +48,7 @@ outside the spec:
 We are extracting a known-good design, not decomposing speculatively. Codex's
 own "what would change my mind — proven design" is met by the prior art the
 council could not see. Consumer #1 = wicked-garden harness; declared #2 =
-wicked-testing (substrate). **wicked-vault is a standalone product.**
+wicked-testing (substrate). **wicked-vault is a standalone product.** <!-- historical -->
 
 ### Q2 — Per-entry storage: ACCEPTED, and UPGRADED to mandatory
 
