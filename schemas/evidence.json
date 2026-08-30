@@ -104,6 +104,37 @@
         "additionalProperties": false
       }
     },
+    "scenario_evidence": {
+      "type": "object",
+      "description": "OPTIONAL manifest-2.1 block (minor bump — 2.0.0 manifests without it stay valid): the campaign evidence shape proven by the 2026-08 studio E2E campaign, plus the first-class claim_level enum. `status` is the EXECUTOR'S CLAIM in the verdict taxonomy — never the verdict of record (the top-level `verdict` block stays that). Deliberately `additionalProperties: true`, unlike the producer-integrity guards elsewhere in this schema: the authoritative twin validator (wicked-ledger lib/manifest.mjs validateManifest, mirrored here in lib/manifest.mjs) tolerates unknown keys inside this block by the additive doctrine, so a newer producer's optional key must not be rejected. The honest-cap invariant — the overall claim_level may never be STRONGER than the weakest leg in `legs` (certify the journey, not the proxy; self-capping further is allowed) — is not expressible here and is enforced by the twin JS validator.",
+      "required": ["scenario", "status", "claim_level"],
+      "properties": {
+        "scenario":    { "type": "string", "minLength": 1, "description": "Scenario title/identifier as executed." },
+        "status":      { "type": "string", "enum": ["PASS", "FAIL", "PARTIAL", "CONDITIONAL", "INCONCLUSIVE", "N-A", "SKIP"], "description": "Executor's claim, in the verdict taxonomy." },
+        "claim_level": { "type": "string", "enum": ["certified", "machinery-verified", "skipped"], "description": "Overall claim level for the scenario (floor of the legs): certified = the user journey itself was exercised and verified; machinery-verified = a disclosed proxy verified the machinery, not the journey; skipped = not executed (disclosed)." },
+        "ui_steps":    { "type": "array", "items": { "type": "string" } },
+        "screenshots": { "type": "array", "items": { "type": "string" } },
+        "wire_evidence": { "type": ["object", "string"] },
+        "db_evidence":   { "type": ["object", "string"] },
+        "terminal_state_proof": { "type": "string" },
+        "notes": { "type": ["string", "array"], "items": { "type": "string" } },
+        "legs": {
+          "type": "array",
+          "description": "Per-leg claim levels (e.g. an API-substituted acceptance leg).",
+          "items": {
+            "type": "object",
+            "required": ["leg", "claim_level"],
+            "properties": {
+              "leg":         { "type": "string", "minLength": 1, "description": "Leg name, e.g. \"ui\", \"acceptance\"." },
+              "claim_level": { "type": "string", "enum": ["certified", "machinery-verified", "skipped"] },
+              "reason":      { "type": "string", "description": "Why the leg is capped/skipped (disclosed substitutions)." }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
     "assertions": {
       "type": "array",
       "items": {

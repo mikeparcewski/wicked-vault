@@ -43,5 +43,5 @@ export { initBus } from "./src/vault/bus.mjs";
 // --- WICKED_RUNTIME profile resolution (foundation team-profile seam) ---
 export { resolveRuntimeProfile, assertRuntimeSupported } from "./src/vault/runtime.mjs";
 
-// --- Evidence-manifest builder + verdict enum (shared with wicked-ledger) ---
-export { buildManifest, MANIFEST_VERSION, VERDICT_VALUES } from "./lib/manifest.mjs";
+// --- Evidence-manifest builder + validator + verdict/claim enums (shared with wicked-ledger) ---
+export { buildManifest, validateManifest, MANIFEST_VERSION, VERDICT_VALUES, CLAIM_LEVELS } from "./lib/manifest.mjs";
