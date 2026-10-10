@@ -4,6 +4,18 @@ All notable changes to **wicked-vault** are documented here. Format:
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions match
 [npm](https://www.npmjs.com/package/wicked-vault?activeTab=versions).
 
+## [0.8.0] — 2026-10-10
+
+### Fixed
+- **Contract pins are enforced in full** (FND-VLT-01, #27): verifier params are pinned, and every
+  current-contract pin is re-checked at cross-check.
+- **Attestations are re-validated on every read** (FND-VLT-02, #28): hash, binding, opinion and
+  evaluator. A corrupt record fails judgment gates closed.
+
+### Added
+- **Typed obligations** (FND-VLT-04, #29): cross-check reports `obligations` and
+  `contract_satisfied`. The result fields are additive; `overall` and the exit code are unchanged.
+
 ## [0.7.0] — 2026-08-30
 
 ### Added
