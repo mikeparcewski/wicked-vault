@@ -54,6 +54,15 @@ R=$($VAULT cross-check --scope konly --phase build)
 [ "$(echo "$R" | jget "d['claims'][0].get('detail','')")" = "exit_code=1" ] && ok "kind-only pin binds the kind, the artifact's own params decide" || bad "kind-only pin wrong: $R"
 echo
 
+pin konly2 '{"claim_id":"tests","verifier":"{\"kind\":\"exit_code_eq\"}"}'
+rec konly2 capture.json "exit_code_eq:1" "x" "y" >/dev/null
+R=$($VAULT cross-check --scope konly2 --phase build)
+[ "$(echo "$R" | jget "d['overall']")" = "PASS" ] && ok "JSON-string kind-only pin behaves like the object form" || bad "JSON-string kind-only pin wrong: $R"
+pin missj '{"claim_id":"absent","require_attestation":true}'
+R=$($VAULT cross-check --scope missj --phase build)
+[ "$(echo "$R" | jget "d['obligations']['judgment']")" = "unsatisfied" ] && ok "missing artifact keeps its judgment obligation (unsatisfied)" || bad "missing-artifact judgment wrong: $R"
+echo
+
 echo "=== FND-VLT-01c: a stricter contract declared after capture fails closed ==="
 # capture with no contract, then the consumer declares its bar
 rec late capture.json "exit_code_eq:1" "test-fixture" "expected exit is one" >/dev/null
@@ -86,13 +95,14 @@ AF=".wicked-vault/attestations/$AID/$ATT.json"
 R=$($VAULT cross-check --scope judged --phase build --with-attestations)
 [ "$(echo "$R" | jget "d['overall']")" = "PASS" ] && ok "intact attestation -> PASS (positive control)" || bad "intact attestation did not PASS: $R"
 cp "$AF" "$WORK/att.orig"
-for mut in "d['rationale']='changed without rehash'" "d['opinion']='reject'" "d['evaluator']='someone-else'" "d['artifact_id']='01OTHER'"; do
+for mut in "d['evaluator']='   ';import hashlib;t={k:v for k,v in d.items() if k!='attestation_hash'};d['attestation_hash']=hashlib.sha256(json.dumps(t,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()" "d['rationale']='changed without rehash'" "d['opinion']='reject'" "d['evaluator']='someone-else'" "d['artifact_id']='01OTHER'"; do
   cp "$WORK/att.orig" "$AF"
   python3 -c "import json;p='$AF';d=json.load(open(p));$mut;json.dump(d,open(p,'w'))"
   R=$($VAULT cross-check --scope judged --phase build --with-attestations)
   overall=$(echo "$R" | jget "d['overall']"); res=$(echo "$R" | jget "d['claims'][0]['result']")
   V=$($VAULT verify "$AID")
   vc=$(echo "$V" | jget "len(d.get('corrupt_attestations') or [])")
+  case "$mut" in *"'   '"*) echo "$V" | grep -q "empty evaluator identity" || vc="wrong-reason";; esac
   if [ "$overall" = "ERROR" ] && [ "$res" = "ERROR" ] && [ "$vc" = "1" ]; then
     ok "mutation [$mut] -> cross-check ERROR, verify flags 1 corrupt attestation"
   else

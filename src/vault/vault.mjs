@@ -162,14 +162,15 @@ function normalizeVerifier(v) {
 }
 function verifierPinMatches(pinVerifier, actual) {
   if (!actual) return false;
-  const kindOnly = typeof pinVerifier === 'string'
-    ? !pinVerifier.trim().startsWith('{') && !pinVerifier.includes(':')
-    : pinVerifier.params === undefined;
-  if (kindOnly) {
-    const kind = typeof pinVerifier === 'string' ? pinVerifier.trim() : pinVerifier.kind;
-    return kind === actual.kind;
-  }
-  return normalizeVerifier(pinVerifier) === normalizeVerifier(actual);
+  // Parse string pins first so a JSON-string pin and the equivalent object
+  // behave the same; a bare kind string ("exit_code_eq") is kind-only.
+  const str = typeof pinVerifier === 'string' ? pinVerifier.trim() : null;
+  const spec = str === null ? pinVerifier : parseVerifier(str);
+  const kindOnly = str === null || str.startsWith('{')
+    ? spec.params === undefined
+    : !str.includes(':');
+  if (kindOnly) return spec.kind === actual.kind;
+  return normalizeVerifier(spec) === normalizeVerifier(actual);
 }
 
 // FND-VLT-01 — every pin the CURRENT contract states for a claim, compared to a
@@ -539,6 +540,7 @@ function attestationProblem(att, id, entry) {
   if (sha256(Buffer.from(canonical(tuple), 'utf8')) !== attestation_hash) return 'attestation_hash does not match the stored tuple';
   if (att.artifact_id !== id) return `artifact_id '${att.artifact_id}' does not name this artifact`;
   if (!OPINIONS.has(att.opinion)) return `unknown opinion '${att.opinion}'`;
+  if (att.evaluator.trim() === '') return 'empty evaluator identity';
   if (entry && entry.created_by && att.evaluator.trim().toLowerCase() === String(entry.created_by).trim().toLowerCase()) {
     return 'evaluator equals the artifact creator (self-grade)';
   }
@@ -619,7 +621,11 @@ export function crossCheck(root, scope, phase, opts = {}) {
       .sort((a, b) => (a.id < b.id ? 1 : -1)); // latest active wins
     const art = matches[0];
     if (!art) {
-      claims.push({ claim_id: req.claim_id, result: req.required === false ? 'PASS' : 'MISSING' });
+      claims.push({
+        claim_id: req.claim_id, result: req.required === false ? 'PASS' : 'MISSING',
+        // a required judgment on a missing artifact cannot be satisfied
+        ...(req.require_attestation && req.required !== false ? { judgment: 'unsatisfied' } : {}),
+      });
       integrityOk.push(req.required === false);
       continue;
     }
