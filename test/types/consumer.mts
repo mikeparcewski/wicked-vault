@@ -170,6 +170,13 @@ export function _vaultCoreSurface(): void {
   const claim: CrossCheckClaim = cc.claims[0]!;
   expectType<CrossCheckClaimResult>(claim.result);
   expectType<VerifierStatus | undefined>(claim.verifier_status);
+  // FND-VLT-04 typed obligations + FND-VLT-02 corrupt-record surface.
+  expectType<boolean | undefined>(cc.contract_satisfied);
+  expectType<"satisfied" | "unsatisfied" | "vacuous" | undefined>(cc.obligations?.integrity);
+  expectType<"satisfied" | "unsatisfied" | "not_evaluated" | "not_required" | undefined>(cc.obligations?.judgment);
+  expectType<"satisfied" | "unsatisfied" | "not_evaluated" | undefined>(claim.judgment);
+  expectType<string | undefined>(claim.corrupt_attestations?.[0]?.error);
+  expectType<boolean>(listAttestations(root!, rec.id)[0]!.attestation_ok);
 
   expectType<{ new_id: string; old_id: string }>(supersede(root!, rec.id, opts));
 

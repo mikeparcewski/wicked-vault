@@ -146,7 +146,12 @@ skill orchestrates an **independent** judge:
    and evidence are passed as escaped *data*, never as instructions).
 3. `attest` records the `{opinion, rationale, evaluator, model, …}` to an
    append-only, hash-bound log (mutation-detecting; the committed git history is
-   the durable tamper-evidence — see "Tamper detection").
+   the durable tamper-evidence — see "Tamper detection"). Every read
+   (`verify`, `attestations`, `cross-check --with-attestations`) recomputes each
+   record's `attestation_hash` and re-checks its artifact binding, opinion enum
+   and evaluator ≠ creator; an invalid record is reported in
+   `corrupt_attestations`, is never selected as the latest opinion, and makes a
+   `require_attestation` claim fail closed with `ERROR`.
 
 Guarantees that hold: criteria are frozen to the evidence (anti-downgrade);
 `attest` is **fail-closed** on a tampered artifact and **rejects a self-grade**
@@ -161,7 +166,13 @@ independence — a determined human can still assert two distinct strings locall
 real independence comes from a separate evaluator process/credential and the
 committed git trail. What's traded: a judgment is **not reproducible** —
 it's re-evaluated, not re-derived. The default CI gate stays on the
-deterministic `--integrity-only` path; the judgment tier is opt-in. Threat model
+deterministic `--integrity-only` path; the judgment tier is opt-in.
+Every cross-check result says which obligations it actually satisfied:
+`obligations: {integrity, judgment}` (`judgment: "not_evaluated"` when
+integrity-only mode skipped a `require_attestation` claim; `integrity:
+"vacuous"` for an empty contract) and one `contract_satisfied` boolean. Gate on
+`contract_satisfied` when PASS must mean the whole contract; `overall` keeps its
+mode-scoped meaning and exit code. Threat model
 (prompt injection, lax-bar self-grade) and the council 5–0 review:
 [`docs/adr/0002`](docs/adr/0002-independent-evaluation-and-criteria-binding.md).
 

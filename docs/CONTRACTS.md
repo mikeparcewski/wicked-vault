@@ -164,6 +164,16 @@ for reference, flagged `stale` if `evidence_sha256`/`criteria_sha256` no longer
 match the artifact. **It is never re-derived; it is never trusted as
 reproducible.**
 
+**Read-time validation (FND-VLT-02).** The stored `attestation_hash` is not
+write-only: `verify`, `attestations` and `cross-check --with-attestations`
+recompute it over the canonical tuple on every read and also check the required
+fields, `artifact_id` == the judged artifact, the `opinion` enum and evaluator ≠
+`created_by`. A record that fails (or does not parse) is listed with
+`attestation_ok: false` + `attestation_error`, surfaced in
+`corrupt_attestations`, never selected as the latest opinion, and a
+`require_attestation` claim whose log contains one is `ERROR` (fail-closed: the
+corrupt record may have been the latest).
+
 ---
 
 ## 4. Guarantee invariants (the load-bearing promises)
@@ -196,9 +206,17 @@ reproducible.**
 - **G7 verifier purity** — a verifier is a pure, deterministic function of
   `(payload, params)`. Re-derivable; no hidden state. (Nondeterministic kinds
   are quarantined — see §5.)
-- **G8 contract pinning** — `kind`, `source`, and `verifier` are pinned per
-  claim in the contract; `record` rejects a downgrade (e.g. swapping a strict
-  verifier for a weaker one, or pointing `source` at a different command).
+- **G8 contract pinning** — `kind`, `source`, `criteria` and `verifier` are
+  pinned per claim in the contract; `record` rejects a downgrade (e.g. swapping a
+  strict verifier for a weaker one, or pointing `source` at a different command).
+  A verifier pin with `params` is compared as the **full** normalized spec (kind
+  + params — `exit_code_eq` code 1 does not satisfy a pinned code 0); a pin with
+  no `params` pins the kind only. `cross-check` re-checks **every** pin of the
+  *current* contract against the selected artifact, so a contract declared or
+  tightened after capture still binds it: any mismatch is `ERROR`
+  (`contract pin mismatch: <field>`). Version policy: `contract_version` is
+  informational — a redeclared contract whose pins the artifact still matches is
+  compatible; any pin mismatch is not (FND-VLT-01).
 - **G9 mechanical evaluation (the boundary, enforced)** — the vault never
   *authors* a contract; the consumer (wicked-garden compiler / the qe pipeline)
   does. `cross-check`'s verdict is a pure function of `(consumer-authored

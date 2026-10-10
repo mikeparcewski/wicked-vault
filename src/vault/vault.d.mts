@@ -156,7 +156,18 @@ export interface VerifyResult {
   detail: string;
   /** The stored status_at_record, surfaced to show it was NOT consulted (G3). */
   ignored_cached_status?: VerifierStatus | "n/a";
+  /** Latest attestation whose stored hash and binding validate (corrupt records are never selected). */
   latest_attestation?: LatestAttestationSummary | null;
+  /** FND-VLT-02 — opinion records that failed read-time validation. */
+  corrupt_attestations?: CorruptAttestation[];
+}
+
+/** An opinion record that failed read-time validation (hash, binding, enum, self-grade, parse). */
+export interface CorruptAttestation {
+  attestation_id: string | null;
+  /** Present when the record could not be parsed or failed validation. */
+  file?: string;
+  error: string;
 }
 
 /**
@@ -243,8 +254,25 @@ export interface Attestation {
   attestation_hash: string;
 }
 
-/** The append-only opinion log for an artifact, newest first. */
-export function listAttestations(root: string, id: string): Attestation[];
+/**
+ * A listed opinion record annotated with its read-time validation result
+ * (FND-VLT-02). When `attestation_ok` is false the record's fields are
+ * untrusted and may be missing (an unparseable file carries only `file` and
+ * `attestation_error`).
+ */
+export type ListedAttestation = Attestation & {
+  attestation_ok: boolean;
+  attestation_error?: string;
+  file?: string;
+};
+
+/**
+ * The append-only opinion log for an artifact, newest first. Every record is
+ * re-validated on read (canonical hash, artifact binding, opinion enum,
+ * evaluator != creator); invalid or unparseable records are returned with
+ * attestation_ok=false instead of being trusted or throwing.
+ */
+export function listAttestations(root: string, id: string): ListedAttestation[];
 
 /** One pinned claim in a consumer-authored contract. */
 export interface ContractClaim {
@@ -253,8 +281,12 @@ export interface ContractClaim {
   kind?: string;
   /** Pin the exact source (command/file). */
   source_pin?: string;
-  /** Pin the verifier kind. */
-  verifier?: { kind: VerifierKind | (string & {}); params?: VerifierParams };
+  /**
+   * Pin the verifier. With `params` the FULL spec (kind + params) must match;
+   * without `params` (or as a bare kind string) only the kind is pinned.
+   * Enforced at record AND re-checked against the current contract at cross-check.
+   */
+  verifier?: { kind: VerifierKind | (string & {}); params?: VerifierParams } | string;
   /** D1 trusted path: criteria pinned by the contract (exact-match enforced). */
   criteria?: string;
   /** false marks the claim optional in cross-check (missing evidence still passes). */
@@ -284,8 +316,15 @@ export function listEntries(root: string, scope?: string, phase?: string): Vault
 
 export type CrossCheckClaimResult = "PASS" | "FAIL" | "MISSING" | "ERROR" | "UNATTESTED" | "REJECT";
 
+/** Judgment-obligation state of one claim (present only when the claim sets require_attestation). */
+export type JudgmentObligation = "satisfied" | "unsatisfied" | "not_evaluated";
+
 export interface CrossCheckClaim {
   claim_id: string;
+  /** FND-VLT-04 — present iff the contract claim sets require_attestation. */
+  judgment?: JudgmentObligation;
+  /** FND-VLT-02 — present in --with-attestations mode when the log holds invalid records. */
+  corrupt_attestations?: CorruptAttestation[];
   /** Absent when no active artifact matched the claim. */
   artifact_id?: string;
   result: CrossCheckClaimResult;
@@ -312,6 +351,21 @@ export interface CrossCheckResult {
   detail?: string;
   claims: CrossCheckClaim[];
   evaluated_at?: string;
+  /**
+   * FND-VLT-04 — which obligations were satisfied. `integrity` is "vacuous" for
+   * an empty contract; `judgment` is "not_evaluated" when integrity-only mode
+   * skipped a require_attestation claim. Absent on the no-contract ERROR path.
+   */
+  obligations?: {
+    integrity: "satisfied" | "unsatisfied" | "vacuous";
+    judgment: "satisfied" | "unsatisfied" | "not_evaluated" | "not_required";
+  };
+  /**
+   * FND-VLT-04 — true only when every obligation the contract states was
+   * evaluated and met and the contract is non-empty. Gate on this when
+   * "PASS" must mean the whole contract, not the selected mode.
+   */
+  contract_satisfied?: boolean;
 }
 
 /**

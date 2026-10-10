@@ -149,6 +149,44 @@ export function parseVerifier(spec) {
   }
 }
 
+// FND-VLT-01 — a pin's verifier is compared as a FULL normalized spec (kind +
+// params), not kind alone: `exit_code_eq` with code 1 is a different, weaker
+// predicate than the pinned `exit_code_eq` with code 0. A pin may be authored as
+// an object or the same string shorthand `record --verifier` accepts. A pin that
+// states no params at all (`{ "kind": "exit_code_eq" }` or the bare string
+// `"exit_code_eq"`) deliberately pins the kind only.
+function normalizeVerifier(v) {
+  if (v == null) return null;
+  const spec = typeof v === 'string' ? parseVerifier(v) : v;
+  return canonical({ kind: spec.kind, params: spec.params || {} });
+}
+function verifierPinMatches(pinVerifier, actual) {
+  if (!actual) return false;
+  const kindOnly = typeof pinVerifier === 'string'
+    ? !pinVerifier.trim().startsWith('{') && !pinVerifier.includes(':')
+    : pinVerifier.params === undefined;
+  if (kindOnly) {
+    const kind = typeof pinVerifier === 'string' ? pinVerifier.trim() : pinVerifier.kind;
+    return kind === actual.kind;
+  }
+  return normalizeVerifier(pinVerifier) === normalizeVerifier(actual);
+}
+
+// FND-VLT-01 — every pin the CURRENT contract states for a claim, compared to a
+// recorded entry. Returns the first mismatching field name (kind | source |
+// criteria | verifier) or null when the entry satisfies every stated pin. Used
+// at record time (reject a downgrade) and at cross-check time (a contract
+// declared or tightened after capture must still bind the evidence it selects).
+// Version policy: contract_version is informational — a redeclared contract
+// whose pins the entry still matches is compatible; any pin mismatch is not.
+function pinMismatch(pin, ent) {
+  if (pin.kind && pin.kind !== ent.kind) return 'kind';
+  if (pin.source_pin && pin.source_pin !== ent.source) return 'source';
+  if (typeof pin.criteria === 'string' && pin.criteria !== ent.acceptance_criteria) return 'criteria';
+  if (pin.verifier && !verifierPinMatches(pin.verifier, ent.verifier)) return 'verifier';
+  return null;
+}
+
 function loadContract(root, scope, phase) {
   const p = join(paths(root).contracts, scope, `${phase}.json`);
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null;
@@ -253,7 +291,10 @@ export function record(root, opts) {
     if (pin) {
       if (pin.kind && pin.kind !== opts.kind) throw new Error(`G8 pin violation: kind '${opts.kind}' != pinned '${pin.kind}'`);
       if (pin.source_pin && pin.source_pin !== opts.source) throw new Error('G8 pin violation: source != pinned source');
-      if (pin.verifier && (!verifier || pin.verifier.kind !== verifier.kind)) throw new Error(`G8 pin violation: verifier '${verifier ? verifier.kind : 'none'}' != pinned '${pin.verifier.kind}'`);
+      // Full spec (kind + params), not kind alone (FND-VLT-01).
+      if (pin.verifier && !verifierPinMatches(pin.verifier, verifier)) {
+        throw new Error(`G8 pin violation: verifier ${verifier ? normalizeVerifier(verifier) : 'none'} != pinned ${normalizeVerifier(pin.verifier)}`);
+      }
       // D1 trusted path: criteria pinned by the contract (authored separately
       // from the worker). A mismatch is a downgrade; an exact match upgrades the
       // provenance class to 'contract'.
@@ -368,7 +409,8 @@ export function verify(root, id) {
 
   // G10 — surface the latest independent opinion for reference (NOT trusted as
   // reproducible, NOT re-derived). Flagged stale if it judged different bytes.
-  const latest = latestAttestation(root, id);
+  const log = readAttestationLog(root, id, entry);
+  const latest = log.latest;
   const latest_attestation = latest ? {
     attestation_id: latest.attestation_id, opinion: latest.opinion,
     evaluator: latest.evaluator, model: latest.model, created_at: latest.created_at,
@@ -381,6 +423,9 @@ export function verify(root, id) {
     detail: hash_ok ? sr.detail : `TAMPER: hash mismatch (payload_ok=${payload_ok}, criteria_ok=${criteria_ok}, envelope_ok=${envelope_ok})`,
     ignored_cached_status: entry.status_at_record,
     latest_attestation,
+    // FND-VLT-02 — opinion records whose stored attestation_hash / binding no
+    // longer validates. Never selected as latest; a judgment gate fails closed.
+    corrupt_attestations: log.corrupt,
   };
 }
 
@@ -479,17 +524,58 @@ export function attest(root, id, opts) {
   return { attestation_id: att.attestation_id, attestation_hash, opinion: att.opinion };
 }
 
-export function listAttestations(root, id) {
-  const dir = attestationDir(root, id);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')))
-    .sort((a, b) => (a.attestation_id < b.attestation_id ? 1 : -1)); // newest first
+// FND-VLT-02 — validate one stored opinion record on READ: the canonical hash
+// over every field but attestation_hash must reproduce the stored hash, the
+// record must name this artifact, carry a known opinion and a non-empty
+// evaluator, and the evaluator must still differ from the artifact creator.
+// Returns null when valid, else the reason string.
+const REQUIRED_ATTESTATION_FIELDS = ['attestation_id', 'artifact_id', 'opinion', 'evaluator', 'evidence_sha256', 'criteria_sha256', 'created_at', 'attestation_hash'];
+function attestationProblem(att, id, entry) {
+  if (!att || typeof att !== 'object' || Array.isArray(att)) return 'not a JSON object';
+  for (const k of REQUIRED_ATTESTATION_FIELDS) {
+    if (typeof att[k] !== 'string' || att[k] === '') return `missing required field '${k}'`;
+  }
+  const { attestation_hash, ...tuple } = att;
+  if (sha256(Buffer.from(canonical(tuple), 'utf8')) !== attestation_hash) return 'attestation_hash does not match the stored tuple';
+  if (att.artifact_id !== id) return `artifact_id '${att.artifact_id}' does not name this artifact`;
+  if (!OPINIONS.has(att.opinion)) return `unknown opinion '${att.opinion}'`;
+  if (entry && entry.created_by && att.evaluator.trim().toLowerCase() === String(entry.created_by).trim().toLowerCase()) {
+    return 'evaluator equals the artifact creator (self-grade)';
+  }
+  return null;
 }
 
-function latestAttestation(root, id) {
-  return listAttestations(root, id)[0] || null;
+// Read + validate the whole opinion log for an artifact. Every record is
+// returned (newest first) annotated with attestation_ok / attestation_error;
+// unparseable files surface as corrupt records instead of throwing.
+function readAttestationLog(root, id, entry) {
+  const dir = attestationDir(root, id);
+  if (!existsSync(dir)) return { all: [], latest: null, corrupt: [] };
+  if (entry === undefined) {
+    const ep = join(paths(root).entries, `${id}.json`);
+    try { entry = existsSync(ep) ? JSON.parse(readFileSync(ep, 'utf8')) : null; } catch { entry = null; }
+  }
+  const all = readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => {
+      let att;
+      try { att = JSON.parse(readFileSync(join(dir, f), 'utf8')); } catch (e) {
+        return { file: f, attestation_ok: false, attestation_error: `unparseable: ${e.message}` };
+      }
+      const problem = attestationProblem(att, id, entry);
+      const base = att && typeof att === 'object' && !Array.isArray(att) ? att : {};
+      return problem
+        ? { ...base, file: f, attestation_ok: false, attestation_error: problem }
+        : { ...base, attestation_ok: true };
+    })
+    .sort((a, b) => (String(a.attestation_id || a.file) < String(b.attestation_id || b.file) ? 1 : -1)); // newest first
+  const corrupt = all.filter((a) => !a.attestation_ok)
+    .map((a) => ({ attestation_id: a.attestation_id || null, file: a.file, error: a.attestation_error }));
+  return { all, latest: all.find((a) => a.attestation_ok) || null, corrupt };
+}
+
+export function listAttestations(root, id) {
+  return readAttestationLog(root, id).all;
 }
 
 export function declareContract(root, scope, phase, spec) {
@@ -526,6 +612,7 @@ export function crossCheck(root, scope, phase, opts = {}) {
   }
   const active = listEntries(root, scope, phase).filter((e) => e.state === 'active');
   const claims = [];
+  const integrityOk = []; // FND-VLT-04 — per-claim integrity-tier outcome
   for (const req of (contract.required_evidence || [])) {
     const matches = active
       .filter((e) => e.claim_id === req.claim_id)
@@ -533,10 +620,20 @@ export function crossCheck(root, scope, phase, opts = {}) {
     const art = matches[0];
     if (!art) {
       claims.push({ claim_id: req.claim_id, result: req.required === false ? 'PASS' : 'MISSING' });
+      integrityOk.push(req.required === false);
       continue;
     }
-    if (req.verifier && (!art.verifier || art.verifier.kind !== req.verifier.kind)) {
-      claims.push({ claim_id: req.claim_id, artifact_id: art.id, result: 'ERROR', detail: 'verifier pin mismatch' });
+    // FND-VLT-01 — revalidate EVERY pin of the current contract against the
+    // selected artifact (a contract declared or tightened after capture still
+    // binds it). Fail closed on any mismatch; never fall back to an older match.
+    const mismatch = pinMismatch(req, art);
+    if (mismatch) {
+      claims.push({
+        claim_id: req.claim_id, artifact_id: art.id, result: 'ERROR',
+        detail: `contract pin mismatch: ${mismatch} (artifact recorded under contract_version ${art.contract_version || 'none'})`,
+        ...(req.require_attestation ? { judgment: 'unsatisfied' } : {}),
+      });
+      integrityOk.push(false);
       continue;
     }
     // Integrity tier (default): deterministic, CI-safe.
@@ -552,15 +649,22 @@ export function crossCheck(root, scope, phase, opts = {}) {
     // artifact. Advisory unless the contract sets require_attestation, in which
     // case a passing, non-stale, independent opinion is required (G10).
     if (withAttestations) {
-      const att = latestAttestation(root, art.id);
+      const log = readAttestationLog(root, art.id, art);
+      const att = log.latest;
       const stale = att && (att.evidence_sha256 !== art.payload_sha256 || att.criteria_sha256 !== art.criteria_sha256);
       claim.attestation = att
         ? { attestation_id: att.attestation_id, opinion: att.opinion, evaluator: att.evaluator, model: att.model, stale: !!stale }
         : null;
+      if (log.corrupt.length > 0) claim.corrupt_attestations = log.corrupt;
       if (req.require_attestation) {
         const attested_pass = !!att && att.opinion === 'pass' && !stale;
         if (!integrity_ok) {
           claim.result = 'FAIL';
+        } else if (log.corrupt.length > 0) {
+          // FND-VLT-02 — a corrupt record in the log means the latest opinion
+          // cannot be trusted (the corrupt one may BE the latest): fail closed.
+          claim.result = 'ERROR';
+          claim.detail = `require_attestation: ${log.corrupt.length} corrupt attestation record(s): ${log.corrupt.map((c) => c.error).join('; ')}`;
         } else if (!att) {
           claim.result = 'UNATTESTED'; claim.detail = 'require_attestation: no independent opinion recorded';
         } else if (!attested_pass) {
@@ -568,16 +672,36 @@ export function crossCheck(root, scope, phase, opts = {}) {
         } else {
           claim.result = 'PASS';
         }
+        claim.judgment = claim.result === 'PASS' ? 'satisfied' : 'unsatisfied';
       }
+    } else if (req.require_attestation) {
+      // FND-VLT-04 — integrity-only mode does not evaluate a required judgment;
+      // say so on the claim instead of letting PASS imply it.
+      claim.judgment = 'not_evaluated';
     }
     claims.push(claim);
+    integrityOk.push(integrity_ok);
   }
   const overall = claims.every((c) => c.result === 'PASS')
     ? 'PASS'
     : (claims.some((c) => c.result === 'ERROR') ? 'ERROR' : 'REJECT');
+
+  // FND-VLT-04 — typed satisfied-obligation summary. `overall` keeps its
+  // mode-scoped meaning; `contract_satisfied` is true only when EVERY obligation
+  // the contract states was evaluated and met, and the contract is non-vacuous.
+  const reqs = contract.required_evidence || [];
+  const integrity = reqs.length === 0 ? 'vacuous'
+    : (integrityOk.every(Boolean) ? 'satisfied' : 'unsatisfied');
+  const judged = claims.filter((c) => c.judgment);
+  const judgment = judged.length === 0 ? 'not_required'
+    : judged.some((c) => c.judgment === 'unsatisfied') ? 'unsatisfied'
+      : judged.some((c) => c.judgment === 'not_evaluated') ? 'not_evaluated' : 'satisfied';
+  const contract_satisfied = integrity === 'satisfied' && overall === 'PASS'
+    && (judgment === 'satisfied' || judgment === 'not_required');
   return {
     scope, phase, contract_version: contract.contract_version,
     mode: withAttestations ? 'with-attestations' : 'integrity-only',
-    overall, claims, evaluated_at: new Date().toISOString(),
+    overall, obligations: { integrity, judgment }, contract_satisfied,
+    claims, evaluated_at: new Date().toISOString(),
   };
 }
